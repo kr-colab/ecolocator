@@ -159,7 +159,7 @@ def sort_samples(samples):
     if not all([sample_data['sampleID2'][x]==samples[x] for x in range(len(samples))]): #check that all sample names are present
         print("sample ordering failed! Check that sample IDs match the VCF.")
         sys.exit()
-    locs=np.array(sample_data[["x","y"]])
+    locs=np.array(sample_data[["x","y", "cov1", "cov2", "cov3"]])
     print("loaded "+str(np.shape(genotypes))+" genotypes\n\n")
     return(sample_data,locs)
 
@@ -201,8 +201,14 @@ def normalize_locs(locs):
     sdlong=np.nanstd(locs[:,0])
     meanlat=np.nanmean(locs[:,1])
     sdlat=np.nanstd(locs[:,1])
-    locs=np.array([[(x[0]-meanlong)/sdlong,(x[1]-meanlat)/sdlat] for x in locs])
-    return meanlong,sdlong,meanlat,sdlat,locs
+    meancov1=np.nanmean(locs[:,2])
+    sdcov1=np.nanstd(locs[:,2])
+    meancov2=np.nanmean(locs[:,3])
+    sdcov2=np.nanstd(locs[:,3])
+    meancov3=np.nanmean(locs[:,4])
+    sdcov3=np.nanstd(locs[:,4])
+    locs=np.array([[(x[0]-meanlong)/sdlong,(x[1]-meanlat)/sdlat,(x[2]-meancov1)/sdcov1,(x[3]-meancov2)/sdcov2,(x[4]-meancov3)/sdcov3] for x in locs])
+    return meanlong,sdlong,meanlat,sdlat,meancov1,sdcov1,meancov2,sdcov2,meancov3,sdcov3,locs
 
 def split_train_test(ac,locs):
     train=np.argwhere(~np.isnan(locs[:,0]))
@@ -221,8 +227,10 @@ def split_train_test(ac,locs):
 
 def load_network(traingen,dropout_prop):
     from tensorflow.keras import backend as K
-    def euclidean_distance_loss(y_true, y_pred):
-        return K.sqrt(K.sum(K.square(y_pred - y_true),axis=-1))
+    def comb_loss(y_true, y_pred):
+        EL=K.sqrt(K.sum(K.square(y_pred - y_true),axis=-1))
+        MSEL=K.losses.mean_squared_error(y_true[2:] - y_pred[2:])
+        return EL+MSEL 
     model = tf.keras.Sequential()
     model.add(tf.keras.layers.BatchNormalization(input_shape=(traingen.shape[1],)))
     for i in range(int(np.floor(args.nlayers/2))):
@@ -233,7 +241,7 @@ def load_network(traingen,dropout_prop):
     model.add(tf.keras.layers.Dense(2))
     model.add(tf.keras.layers.Dense(2))
     model.compile(optimizer="Adam",
-                  loss=euclidean_distance_loss)
+                  loss=comb_loss)
     return model
 
 def load_callbacks(boot):
@@ -311,6 +319,8 @@ def predict_locs(model,predgen,sdlong,meanlong,sdlat,meanlat,testlocs,pred,sampl
     hist=pd.DataFrame(history.history)
     hist.to_csv(args.out+"_history.txt",sep="\t",index=False)
     return(dists)
+
+# new function here? for cov pred? looking into tf tuts for multiple outputs
 
 def plot_history(history,dists,gnuplot):
     if args.plot_history:
