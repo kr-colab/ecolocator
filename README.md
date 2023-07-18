@@ -1,5 +1,15 @@
-`Locator` is a supervised machine learning method for predicting the geographic origin of a sample from
-genotype or sequencing data. A manuscript describing it and its use can be found at https://elifesciences.org/articles/54507
+# ecoLocator
+
+`ecoLocator` is a supervised machine learning method for predicting the 
+geographic origin and environmental covariates of a sample from
+genotype or sequencing data. This work is an extension of 
+[locator](https://github.com/kr-colab/locator), in 
+which the manuscript describing 
+it and its use can be found at https://elifesciences.org/articles/54507
+
+### This repository is currently under construction
+
+----
 
 # Installation 
 
