@@ -603,7 +603,6 @@ else:
         boot = None
         genotypes, samples = load_genotypes()
         sample_data, locs = sort_samples(samples)
-        exit()
         meanlong, sdlong, meanlat, sdlat, locs = normalize_locs(locs)
         ac = filter_snps(genotypes)
         checkpointer, earlystop, reducelr = load_callbacks("FULL")
