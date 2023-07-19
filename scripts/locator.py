@@ -467,7 +467,7 @@ def predict_locs(
         [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in prediction]
     )
     predout = pd.DataFrame(prediction)
-    predout.columns = ["x", "y", "cov1", "cov2", "cov3]
+    predout.columns = ["x", "y", "cov1", "cov2", "cov3"]
     predout["sampleID"] = samples[pred]
     if args.bootstrap or args.jacknife:
         predout.to_csv(args.out + "_boot" + str(boot) + "_predlocs.txt", index=False)
