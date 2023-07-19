@@ -11,6 +11,9 @@ it and its use can be found at https://elifesciences.org/articles/54507
 
 ----
 
+<details>
+<summary><h2>Old</h2></summary>
+	
 # Installation 
 
 The easiest way to install `locator` is to download the github repo and run the setup script. It's usually a good idea to do this in a new conda environment (https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) to avoid version conflicts with other software: 
@@ -169,6 +172,8 @@ These values describe the correlation between predicted and true locations in ea
 # License
 
 This software is available free for all non-commercial use under the non-profit open software license v 3.0 (see LICENSE.txt).
+
+</details>
 
 
 
