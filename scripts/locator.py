@@ -340,25 +340,25 @@ def split_train_test(ac, locs):
     return train, test, traingen, testgen, trainlocs, testlocs, pred, predgen
 
 
-def load_network(traingen, dropout_prop):
-    from tensorflow.keras import backend as K
+#def load_network(traingen, dropout_prop):
+    #from tensorflow.keras import backend as K
 
-    def comb_loss(y_true, y_pred):
-        EL = K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1))
-        MSEL = K.losses.mean_squared_error(y_true[2:] - y_pred[2:])
-        return EL + MSEL
+   # def comb_loss(y_true, y_pred):
+        #EL = K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1))
+        #MSEL = K.losses.mean_squared_error(y_true[2:] - y_pred[2:])
+        #return EL + MSEL
 
-    model = tf.keras.Sequential()
-    model.add(tf.keras.layers.BatchNormalization(input_shape=(traingen.shape[1],)))
-    for i in range(int(np.floor(args.nlayers / 2))):
-        model.add(tf.keras.layers.Dense(args.width, activation="elu"))
-    model.add(tf.keras.layers.Dropout(args.dropout_prop))
-    for i in range(int(np.ceil(args.nlayers / 2))):
-        model.add(tf.keras.layers.Dense(args.width, activation="elu"))
-    model.add(tf.keras.layers.Dense(2))
-    model.add(tf.keras.layers.Dense(2))
-    model.compile(optimizer="Adam", loss=comb_loss)
-    return model
+    #model = tf.keras.Sequential()
+    #model.add(tf.keras.layers.BatchNormalization(input_shape=(traingen.shape[1],)))
+    #for i in range(int(np.floor(args.nlayers / 2))):
+        #model.add(tf.keras.layers.Dense(args.width, activation="elu"))
+    #model.add(tf.keras.layers.Dropout(args.dropout_prop))
+    #for i in range(int(np.ceil(args.nlayers / 2))):
+        #model.add(tf.keras.layers.Dense(args.width, activation="elu"))
+    #model.add(tf.keras.layers.Dense(2))
+    #model.add(tf.keras.layers.Dense(2))
+    #model.compile(optimizer="Adam", loss=comb_loss)
+    #return model
 
 
 def load_network_dual(traingen):
@@ -616,7 +616,7 @@ else:
         boot = None
         genotypes, samples = load_genotypes()
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, locs = normalize_locs(locs)
+        meanlong, sdlong, meanlat, sdlat, meancov1, sdcov1, meancov2, sdcov2, meancov3, sdcov3, locs = normalize_locs(locs)
         ac = filter_snps(genotypes)
         checkpointer, earlystop, reducelr = load_callbacks("FULL")
         (
@@ -629,7 +629,7 @@ else:
             pred,
             predgen,
         ) = split_train_test(ac, locs)
-        model = load_network_dual(traingen, args.dropout_prop)
+        model = load_network_dual(traingen)
         start = time.time()
         history, model = train_network(model, traingen, testgen, trainlocs, testlocs)
         dists = predict_locs(
