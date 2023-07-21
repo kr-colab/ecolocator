@@ -340,25 +340,25 @@ def split_train_test(ac, locs):
     return train, test, traingen, testgen, trainlocs, testlocs, pred, predgen
 
 
-def load_network(traingen, dropout_prop):
-    from tensorflow.keras import backend as K
+#def load_network(traingen, dropout_prop):
+    #from tensorflow.keras import backend as K
 
-    def comb_loss(y_true, y_pred):
-        EL = K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1))
-        MSEL = K.losses.mean_squared_error(y_true[2:] - y_pred[2:])
-        return EL + MSEL
+   # def comb_loss(y_true, y_pred):
+        #EL = K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1))
+        #MSEL = K.losses.mean_squared_error(y_true[2:] - y_pred[2:])
+        #return EL + MSEL
 
-    model = tf.keras.Sequential()
-    model.add(tf.keras.layers.BatchNormalization(input_shape=(traingen.shape[1],)))
-    for i in range(int(np.floor(args.nlayers / 2))):
-        model.add(tf.keras.layers.Dense(args.width, activation="elu"))
-    model.add(tf.keras.layers.Dropout(args.dropout_prop))
-    for i in range(int(np.ceil(args.nlayers / 2))):
-        model.add(tf.keras.layers.Dense(args.width, activation="elu"))
-    model.add(tf.keras.layers.Dense(2))
-    model.add(tf.keras.layers.Dense(2))
-    model.compile(optimizer="Adam", loss=comb_loss)
-    return model
+    #model = tf.keras.Sequential()
+    #model.add(tf.keras.layers.BatchNormalization(input_shape=(traingen.shape[1],)))
+    #for i in range(int(np.floor(args.nlayers / 2))):
+        #model.add(tf.keras.layers.Dense(args.width, activation="elu"))
+    #model.add(tf.keras.layers.Dropout(args.dropout_prop))
+    #for i in range(int(np.ceil(args.nlayers / 2))):
+        #model.add(tf.keras.layers.Dense(args.width, activation="elu"))
+    #model.add(tf.keras.layers.Dense(2))
+    #model.add(tf.keras.layers.Dense(2))
+    #model.compile(optimizer="Adam", loss=comb_loss)
+    #return model
 
 
 def load_network_dual(traingen):
@@ -372,8 +372,7 @@ def load_network_dual(traingen):
         EL = K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1))
         return EL
 
-    model = tf.keras.Sequential()
-    geno_input = keras.Input(shape=(traingen.shape[1],), name="geno_input")
+    geno_input = tf.keras.Input(shape=(traingen.shape[1],), name="geno_input")
     trunk_model = tf.keras.layers.BatchNormalization()(geno_input)
     for i in range(int(np.floor(args.nlayers / 2))):
         trunk_model = tf.keras.layers.Dense(args.width, activation="elu")(trunk_model)
@@ -384,7 +383,7 @@ def load_network_dual(traingen):
     loc_output = tf.keras.layers.Dense(2)(loc_model)
     env_model = tf.keras.layers.Dense(3)(trunk_model)
     env_output = tf.keras.layers.Dense(3)(env_model)
-    model = keras.Model(inputs=geno_input, outputs=[loc_output, env_output])
+    model = tf.keras.Model(inputs=geno_input, outputs=[loc_output, env_output])
     model.compile(optimizer="Adam", loss=[euclid_loss, "mse"], loss_weights=[1, 1])
     return model
 
@@ -449,6 +448,12 @@ def predict_locs(
     meanlong,
     sdlat,
     meanlat,
+    sdcov1,
+    meancov1,
+    sdcov2,
+    meancov2,
+    sdcov3,
+    meancov3,
     testlocs,
     pred,
     samples,
@@ -459,15 +464,15 @@ def predict_locs(
         print("predicting locations...")
     prediction = model.predict(predgen)
     prediction = np.array(
-        [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] for x in prediction]
+        [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in prediction]
     )
     predout = pd.DataFrame(prediction)
-    predout.columns = ["x", "y"]
+    predout.columns = ["x", "y", "cov1", "cov2", "cov3"]
     predout["sampleID"] = samples[pred]
     if args.bootstrap or args.jacknife:
         predout.to_csv(args.out + "_boot" + str(boot) + "_predlocs.txt", index=False)
         testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] for x in testlocs]
+            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs]
         )
     elif args.windows:
         predout.to_csv(
@@ -475,17 +480,20 @@ def predict_locs(
             index=False,
         )  # this is dumb
         testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] for x in testlocs]
+            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs]
         )
     else:
         predout.to_csv(args.out + "_predlocs.txt", index=False)
         testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] for x in testlocs]
+            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs]
         )
     p2 = model.predict(testgen)  # print validation loss to screen
-    p2 = np.array([[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] for x in p2])
+    p2 = np.array([[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in p2])
     r2_long = np.corrcoef(p2[:, 0], testlocs2[:, 0])[0][1] ** 2
     r2_lat = np.corrcoef(p2[:, 1], testlocs2[:, 1])[0][1] ** 2
+    r2_cov1 = np.corrcoef(p2[:, 2], testlocs2[:, 2])[0][1] ** 2
+    r2_cov2 = np.corrcoef(p2[:, 3], testlocs2[:, 3])[0][1] ** 2
+    r2_cov3 = np.corrcoef(p2[:, 4], testlocs2[:, 4])[0][1] ** 2
     mean_dist = np.mean(
         [spatial.distance.euclidean(p2[x, :], testlocs2[x, :]) for x in range(len(p2))]
     )
@@ -501,6 +509,12 @@ def predict_locs(
             + str(r2_long)
             + "\nR2(y)="
             + str(r2_lat)
+            + "\nR2(cov1)="
+            + str(r2_cov1)
+            + "\nR2(cov2)="
+            + str(r2_cov2)
+            + "\nR2(cov3)="
+            + str(r2_cov3)
             + "\n"
             + "mean validation error "
             + str(mean_dist)
@@ -514,7 +528,6 @@ def predict_locs(
     return dists
 
 
-# new function here? for cov pred? looking into tf tuts for multiple outputs
 
 
 def plot_history(history, dists, gnuplot):
@@ -603,7 +616,7 @@ else:
         boot = None
         genotypes, samples = load_genotypes()
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, locs = normalize_locs(locs)
+        meanlong, sdlong, meanlat, sdlat, meancov1, sdcov1, meancov2, sdcov2, meancov3, sdcov3, locs = normalize_locs(locs)
         ac = filter_snps(genotypes)
         checkpointer, earlystop, reducelr = load_callbacks("FULL")
         (
@@ -616,7 +629,7 @@ else:
             pred,
             predgen,
         ) = split_train_test(ac, locs)
-        model = load_network_dual(traingen, args.dropout_prop)
+        model = load_network_dual(traingen)
         start = time.time()
         history, model = train_network(model, traingen, testgen, trainlocs, testlocs)
         dists = predict_locs(
