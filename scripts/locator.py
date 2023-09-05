@@ -170,6 +170,18 @@ parser.add_argument(
                     Yes, 1 is more verbose than 2. Blame keras. \
                     default: 1. ",
 )
+parser.add_argument(
+    "--env_weight",
+    default=1.0
+    type=float
+    help="loss weight for euclidean loss function. 1 = default. 0 = no prediction."
+)
+parser.add_argument(
+    "--loc_weight",
+    default=1.0
+    type=float
+    help="loss weight for mean squared error loss function. 1 = default. 0 = no prediction"
+)
 args = parser.parse_args()
 
 # set seed and gpu
@@ -384,7 +396,7 @@ def load_network_dual(traingen):
     env_model = tf.keras.layers.Dense(3)(trunk_model)
     env_output = tf.keras.layers.Dense(3)(env_model)
     model = tf.keras.Model(inputs=geno_input, outputs=[loc_output, env_output])
-    model.compile(optimizer="Adam", loss=[euclid_loss, "mse"], loss_weights=[1, 1])
+    model.compile(optimizer="Adam", loss=[euclid_loss, "mse"], loss_weights=[1, 1]) #changing this here soon 
     return model
 
 
