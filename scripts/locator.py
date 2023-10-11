@@ -396,7 +396,7 @@ def load_network_dual(traingen):
     env_model = tf.keras.layers.Dense(3)(trunk_model)
     env_output = tf.keras.layers.Dense(3)(env_model)
     model = tf.keras.Model(inputs=geno_input, outputs=[loc_output, env_output])
-    model.compile(optimizer="Adam", loss=[euclid_loss, "mse"], loss_weights=[1, 1]) #changing this here soon 
+    model.compile(optimizer="Adam", loss=[euclid_loss, "mse"], loss_weights=[args.loc_weight, args.env_weight]) #changing this here soon 
     return model
 
 
