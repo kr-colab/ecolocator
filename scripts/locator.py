@@ -172,15 +172,15 @@ parser.add_argument(
 )
 parser.add_argument(
     "--env_weight",
-    default=1.0
-    type=float
-    help="loss weight for euclidean loss function. 1 = default. 0 = no prediction."
+    default=1.0,
+    type=float,
+    help="loss weight for euclidean loss function. 1 = default. 0 = no prediction.",
 )
 parser.add_argument(
     "--loc_weight",
-    default=1.0
-    type=float
-    help="loss weight for mean squared error loss function. 1 = default. 0 = no prediction"
+    default=1.0,
+    type=float,
+    help="loss weight for mean squared error loss function. 1 = default. 0 = no prediction",
 )
 args = parser.parse_args()
 
@@ -641,7 +641,26 @@ else:
             pred,
             predgen,
         ) = split_train_test(ac, locs)
+        ### Testing 
+        # locs2 = pd.DataFrame(locs, columns = ["lat", "lon", "cov1", "cov2", "cov3"])
+        # print(type(locs))
+        # print(type(locs2))
+        # print("locs dimensions are")
+        # print(locs2.shape)
+        # print(locs2.head)
+        # print("cov 1 mean is")
+        # print(round(locs2["cov1"].mean()))
+        # print("cov 2 mean is")
+        # print(round(locs2["cov2"].mean()))
+        # print("cov 3 mean is")
+        # print(round(locs2["cov3"].mean()))
+        # exit()
+        ### 
         model = load_network_dual(traingen)
+        # loss_weights=[args.loc_weight, args.env_weight]
+        # print(loss_weights)
+        # exit()
+        # above three lines to confirm that I defined the arg.parse lines correctly - checked out!! 
         start = time.time()
         history, model = train_network(model, traingen, testgen, trainlocs, testlocs)
         dists = predict_locs(
@@ -659,6 +678,7 @@ else:
         plot_history(history, dists, args.gnuplot)
         if not args.keep_weights:
             subprocess.run("rm " + args.out + "_weights.hdf5", shell=True)
+            ## Do I need to change the above two lines?
         end = time.time()
         elapsed = end - start
         print("run time " + str(elapsed / 60) + " minutes")
