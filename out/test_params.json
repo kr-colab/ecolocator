@@ -26,9 +26,10 @@
   "gpu_number": null,
   "plot_history": true,
   "gnuplot": false,
-  "keep_weights": false,
+  "keep_weights": true,
   "load_params": null,
   "keras_verbose": 1,
   "env_weight": 1.0,
-  "loc_weight": 1.0
+  "loc_weight": 1.0,
+  "loss": 0.5
 }

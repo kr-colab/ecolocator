@@ -182,6 +182,12 @@ parser.add_argument(
     type=float,
     help="loss weight for mean squared error loss function. 1 = default. 0 = no prediction",
 )
+parser.add_argument(
+    "--loss",
+    default=0.5,
+    type=float,
+    help="0.5 = default (equal attention to both tasks) 0 = full attention env. cov. prediction, 1 = full attention loc. prediction",
+)
 args = parser.parse_args()
 
 # set seed and gpu
@@ -381,7 +387,7 @@ def load_network_dual(traingen):
     from tensorflow.keras import backend as K
 
     def euclid_loss(y_true, y_pred):
-        EL = K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1))
+        EL = (K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1)))
         return EL
 
     geno_input = tf.keras.Input(shape=(traingen.shape[1],), name="geno_input")
@@ -396,7 +402,8 @@ def load_network_dual(traingen):
     env_model = tf.keras.layers.Dense(3)(trunk_model)
     env_output = tf.keras.layers.Dense(3)(env_model)
     model = tf.keras.Model(inputs=geno_input, outputs=[loc_output, env_output])
-    model.compile(optimizer="Adam", loss=[euclid_loss, "mse"], loss_weights=[args.loc_weight, args.env_weight]) #changing this here soon 
+    model.compile(optimizer="Adam", loss=[euclid_loss, "mse"], loss_weights=[args.loc_weight, args.env_weight])
+    # model.compile(optimizer="Adam", loss=[cust_loss], loss_weights=[args.loss])
     return model
 
 
@@ -589,7 +596,7 @@ if args.windows:
         print(a, b)
         genotypes = allel.GenotypeArray(gt[a:b, :, :])
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, locs = normalize_locs(locs)
+        meanlong, sdlong, meanlat, sdlat, meancov1, sdcov1, meancov2, sdcov2, meancov3, sdcov3, locs = normalize_locs(locs)
         ac = filter_snps(genotypes)
         checkpointer, earlystop, reducelr = load_callbacks("FULL")
         (
@@ -612,6 +619,12 @@ if args.windows:
             meanlong,
             sdlat,
             meanlat,
+            sdcov1,
+            meancov1,
+            sdcov2,
+            meancov2,
+            sdcov3,
+            meancov3,
             testlocs,
             pred,
             samples,
@@ -641,7 +654,7 @@ else:
             pred,
             predgen,
         ) = split_train_test(ac, locs)
-        ### Testing 
+        ### Testing Normalization steps 
         # locs2 = pd.DataFrame(locs, columns = ["lat", "lon", "cov1", "cov2", "cov3"])
         # print(type(locs))
         # print(type(locs2))
@@ -657,10 +670,10 @@ else:
         # exit()
         ### 
         model = load_network_dual(traingen)
-        # loss_weights=[args.loc_weight, args.env_weight]
-        # print(loss_weights)
-        # exit()
-        # above three lines to confirm that I defined the arg.parse lines correctly - checked out!! 
+        #loss_weights=[args.loss]
+        #loss_weights=[args.loc_weight, args.env_weight]
+        #print(loss_weights)
+        #exit()
         start = time.time()
         history, model = train_network(model, traingen, testgen, trainlocs, testlocs)
         dists = predict_locs(
@@ -669,7 +682,13 @@ else:
             sdlong,
             meanlong,
             sdlat,
-            meanlat,
+            meanlat, 
+            meancov1, 
+            sdcov1, 
+            meancov2, 
+            sdcov2, 
+            meancov3, 
+            sdcov3,
             testlocs,
             pred,
             samples,
@@ -686,7 +705,7 @@ else:
         boot = "FULL"
         genotypes, samples = load_genotypes()
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, locs = normalize_locs(locs)
+        meanlong, sdlong, meanlat, sdlat, meancov1, sdcov1, meancov2, sdcov2, meancov3, sdcov3, locs = normalize_locs(locs)
         ac = filter_snps(genotypes)
         checkpointer, earlystop, reducelr = load_callbacks("FULL")
         (
@@ -709,6 +728,12 @@ else:
             meanlong,
             sdlat,
             meanlat,
+            meancov1, 
+            sdcov1, 
+            meancov2, 
+            sdcov2, 
+            meancov3, 
+            sdcov3,
             testlocs,
             pred,
             samples,
@@ -745,6 +770,12 @@ else:
                 meanlong,
                 sdlat,
                 meanlat,
+                meancov1, 
+                sdcov1, 
+                meancov2, 
+                sdcov2, 
+                meancov3, 
+                sdcov3,
                 testlocs,
                 pred,
                 samples,
@@ -763,7 +794,7 @@ else:
         boot = "FULL"
         genotypes, samples = load_genotypes()
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, locs = normalize_locs(locs)
+        meanlong, sdlong, meanlat, sdlat, meancov1, sdcov1, meancov2, sdcov2, meancov3, sdcov3, locs = normalize_locs(locs)
         ac = filter_snps(genotypes)
         checkpointer, earlystop, reducelr = load_callbacks(boot)
         (
@@ -786,6 +817,12 @@ else:
             meanlong,
             sdlat,
             meanlat,
+            meancov1, 
+            sdcov1, 
+            meancov2, 
+            sdcov2, 
+            meancov3, 
+            sdcov3,
             testlocs,
             pred,
             samples,
@@ -816,6 +853,12 @@ else:
                 meanlong,
                 sdlat,
                 meanlat,
+                meancov1, 
+                sdcov1, 
+                meancov2, 
+                sdcov2, 
+                meancov3, 
+                sdcov3,
                 testlocs,
                 pred,
                 samples,
