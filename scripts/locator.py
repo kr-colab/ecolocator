@@ -171,13 +171,13 @@ parser.add_argument(
                     default: 1. ",
 )
 parser.add_argument(
-    "--env_weight",
+    "--loc_weight",
     default=1.0,
     type=float,
     help="loss weight for euclidean loss function. 1 = default. 0 = no prediction.",
 )
 parser.add_argument(
-    "--loc_weight",
+    "--env_weight",
     default=1.0,
     type=float,
     help="loss weight for mean squared error loss function. 1 = default. 0 = no prediction",
