@@ -353,8 +353,10 @@ def split_train_test(ac, locs):
     traingen = np.transpose(ac[:, train])
     trainlocs = [locs[train][:, 0:2],locs[train][:, 2:5]]
     testgen = np.transpose(ac[:, test])
+    #testgen = [np.transpose(ac[:, test[0:2]]), np.transpose(ac[:, test[2:5]])]
     testlocs = [locs[test][:, 0:2],locs[test][:, 2:5]]
-    predgen = np.transpose(ac[:, pred])
+    #predgen = np.transpose(ac[:, pred])
+    predgen = np.transpose(ac[:, pred[0:2]]), np.transpose(ac[:, pred[2:5]])
     return train, test, traingen, testgen, trainlocs, testlocs, pred, predgen
 
 
@@ -677,6 +679,10 @@ else:
         #exit()
         start = time.time()
         history, model = train_network(model, traingen, testgen, trainlocs, testlocs)
+        print(ac.shape)
+        print(genotypes.shape)
+        print(locs.shape)
+        #exit()
         dists = predict_locs(
             model,
             predgen,
