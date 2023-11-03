@@ -29,7 +29,7 @@
   "keep_weights": true,
   "load_params": null,
   "keras_verbose": 1,
-  "env_weight": 1.0,
   "loc_weight": 1.0,
+  "env_weight": 1.0,
   "loss": 0.5
 }

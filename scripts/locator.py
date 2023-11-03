@@ -351,9 +351,9 @@ def split_train_test(ac, locs):
     )
     train = np.array([x for x in train if x not in test])
     traingen = np.transpose(ac[:, train])
-    trainlocs = locs[train]
+    trainlocs = [locs[train][:, 0:2],locs[train][:, 2:5]]
     testgen = np.transpose(ac[:, test])
-    testlocs = locs[test]
+    testlocs = [locs[test][:, 0:2],locs[test][:, 2:5]]
     predgen = np.transpose(ac[:, pred])
     return train, test, traingen, testgen, trainlocs, testlocs, pred, predgen
 
@@ -403,6 +403,7 @@ def load_network_dual(traingen):
     env_output = tf.keras.layers.Dense(3)(env_model)
     model = tf.keras.Model(inputs=geno_input, outputs=[loc_output, env_output])
     model.compile(optimizer="Adam", loss=[euclid_loss, "mse"], loss_weights=[args.loc_weight, args.env_weight])
+    model.summary()
     # model.compile(optimizer="Adam", loss=[cust_loss], loss_weights=[args.loss])
     return model
 
