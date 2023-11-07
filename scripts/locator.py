@@ -170,6 +170,24 @@ parser.add_argument(
                     Yes, 1 is more verbose than 2. Blame keras. \
                     default: 1. ",
 )
+parser.add_argument(
+    "--loc_weight",
+    default=1.0,
+    type=float,
+    help="loss weight for euclidean loss function. 1 = default. 0 = no prediction.",
+)
+parser.add_argument(
+    "--env_weight",
+    default=1.0,
+    type=float,
+    help="loss weight for mean squared error loss function. 1 = default. 0 = no prediction",
+)
+parser.add_argument(
+    "--loss",
+    default=0.5,
+    type=float,
+    help="0.5 = default (equal attention to both tasks) 0 = full attention env. cov. prediction, 1 = full attention loc. prediction",
+)
 args = parser.parse_args()
 
 # set seed and gpu
@@ -333,9 +351,9 @@ def split_train_test(ac, locs):
     )
     train = np.array([x for x in train if x not in test])
     traingen = np.transpose(ac[:, train])
-    trainlocs = locs[train]
+    trainlocs = [locs[train][:, 0:2],locs[train][:, 2:5]]
     testgen = np.transpose(ac[:, test])
-    testlocs = locs[test]
+    testlocs = [locs[test][:, 0:2],locs[test][:, 2:5]]
     predgen = np.transpose(ac[:, pred])
     return train, test, traingen, testgen, trainlocs, testlocs, pred, predgen
 
@@ -369,7 +387,7 @@ def load_network_dual(traingen):
     from tensorflow.keras import backend as K
 
     def euclid_loss(y_true, y_pred):
-        EL = K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1))
+        EL = (K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1)))
         return EL
 
     geno_input = tf.keras.Input(shape=(traingen.shape[1],), name="geno_input")
@@ -384,7 +402,9 @@ def load_network_dual(traingen):
     env_model = tf.keras.layers.Dense(3)(trunk_model)
     env_output = tf.keras.layers.Dense(3)(env_model)
     model = tf.keras.Model(inputs=geno_input, outputs=[loc_output, env_output])
-    model.compile(optimizer="Adam", loss=[euclid_loss, "mse"], loss_weights=[1, 1])
+    model.compile(optimizer="Adam", loss=[euclid_loss, "mse"], loss_weights=[args.loc_weight, args.env_weight])
+    model.summary()
+    # model.compile(optimizer="Adam", loss=[cust_loss], loss_weights=[args.loss])
     return model
 
 
@@ -463,31 +483,38 @@ def predict_locs(
     if verbose == True:
         print("predicting locations...")
     prediction = model.predict(predgen)
-    prediction = np.array(
-        [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in prediction]
+    prediction_longlat = np.array(
+        [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] for x in prediction[0]]          
     )
-    predout = pd.DataFrame(prediction)
-    predout.columns = ["x", "y", "cov1", "cov2", "cov3"]
+    prediction_env = np.array(
+        [[x[0] * sdcov1 + meancov1, x[1] * sdcov2 + meancov2, x[2] * sdcov3 + meancov3] for x in prediction[1]]          
+    )
+    predi = pd.DataFrame(prediction_longlat, columns= ['x', 'y'])
+    ction = pd.DataFrame(prediction_env, columns = ["cov1", "cov2", "cov3"])
+    prediction = [predi, ction]
+    predout = pd.concat((prediction), axis=1)
     predout["sampleID"] = samples[pred]
+    testlocs_flat = np.concatenate([testlocs[0], testlocs[1]], axis=1)
     if args.bootstrap or args.jacknife:
         predout.to_csv(args.out + "_boot" + str(boot) + "_predlocs.txt", index=False)
         testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs]
+            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs_flat]
         )
     elif args.windows:
         predout.to_csv(
             args.out + "_" + str(i) + "-" + str(i + size - 1) + "_predlocs.txt",
             index=False,
-        )  # this is dumb
+        )  
         testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs]
+            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs_flat]
         )
     else:
         predout.to_csv(args.out + "_predlocs.txt", index=False)
         testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs]
+            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs_flat]
         )
     p2 = model.predict(testgen)  # print validation loss to screen
+    p2 = np.concatenate([p2[0], p2[1]], axis=1)
     p2 = np.array([[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in p2])
     r2_long = np.corrcoef(p2[:, 0], testlocs2[:, 0])[0][1] ** 2
     r2_lat = np.corrcoef(p2[:, 1], testlocs2[:, 1])[0][1] ** 2
@@ -577,7 +604,7 @@ if args.windows:
         print(a, b)
         genotypes = allel.GenotypeArray(gt[a:b, :, :])
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, locs = normalize_locs(locs)
+        meanlong, sdlong, meanlat, sdlat, meancov1, sdcov1, meancov2, sdcov2, meancov3, sdcov3, locs = normalize_locs(locs)
         ac = filter_snps(genotypes)
         checkpointer, earlystop, reducelr = load_callbacks("FULL")
         (
@@ -600,6 +627,12 @@ if args.windows:
             meanlong,
             sdlat,
             meanlat,
+            sdcov1,
+            meancov1,
+            sdcov2,
+            meancov2,
+            sdcov3,
+            meancov3,
             testlocs,
             pred,
             samples,
@@ -638,7 +671,13 @@ else:
             sdlong,
             meanlong,
             sdlat,
-            meanlat,
+            meanlat, 
+            meancov1, 
+            sdcov1, 
+            meancov2, 
+            sdcov2, 
+            meancov3, 
+            sdcov3,
             testlocs,
             pred,
             samples,
@@ -654,7 +693,7 @@ else:
         boot = "FULL"
         genotypes, samples = load_genotypes()
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, locs = normalize_locs(locs)
+        meanlong, sdlong, meanlat, sdlat, meancov1, sdcov1, meancov2, sdcov2, meancov3, sdcov3, locs = normalize_locs(locs)
         ac = filter_snps(genotypes)
         checkpointer, earlystop, reducelr = load_callbacks("FULL")
         (
@@ -677,6 +716,12 @@ else:
             meanlong,
             sdlat,
             meanlat,
+            meancov1, 
+            sdcov1, 
+            meancov2, 
+            sdcov2, 
+            meancov3, 
+            sdcov3,
             testlocs,
             pred,
             samples,
@@ -713,6 +758,12 @@ else:
                 meanlong,
                 sdlat,
                 meanlat,
+                meancov1, 
+                sdcov1, 
+                meancov2, 
+                sdcov2, 
+                meancov3, 
+                sdcov3,
                 testlocs,
                 pred,
                 samples,
@@ -731,7 +782,7 @@ else:
         boot = "FULL"
         genotypes, samples = load_genotypes()
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, locs = normalize_locs(locs)
+        meanlong, sdlong, meanlat, sdlat, meancov1, sdcov1, meancov2, sdcov2, meancov3, sdcov3, locs = normalize_locs(locs)
         ac = filter_snps(genotypes)
         checkpointer, earlystop, reducelr = load_callbacks(boot)
         (
@@ -754,6 +805,12 @@ else:
             meanlong,
             sdlat,
             meanlat,
+            meancov1, 
+            sdcov1, 
+            meancov2, 
+            sdcov2, 
+            meancov3, 
+            sdcov3,
             testlocs,
             pred,
             samples,
@@ -784,6 +841,12 @@ else:
                 meanlong,
                 sdlat,
                 meanlat,
+                meancov1, 
+                sdcov1, 
+                meancov2, 
+                sdcov2, 
+                meancov3, 
+                sdcov3,
                 testlocs,
                 pred,
                 samples,
