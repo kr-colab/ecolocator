@@ -353,10 +353,8 @@ def split_train_test(ac, locs):
     traingen = np.transpose(ac[:, train])
     trainlocs = [locs[train][:, 0:2],locs[train][:, 2:5]]
     testgen = np.transpose(ac[:, test])
-    #testgen = [np.transpose(ac[:, test[0:2]]), np.transpose(ac[:, test[2:5]])]
     testlocs = [locs[test][:, 0:2],locs[test][:, 2:5]]
-    #predgen = np.transpose(ac[:, pred])
-    predgen = np.transpose(ac[:, pred[0:2]]), np.transpose(ac[:, pred[2:5]])
+    predgen = np.transpose(ac[:, pred])
     return train, test, traingen, testgen, trainlocs, testlocs, pred, predgen
 
 
@@ -485,31 +483,38 @@ def predict_locs(
     if verbose == True:
         print("predicting locations...")
     prediction = model.predict(predgen)
-    prediction = np.array(
-        [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in prediction]
+    prediction_longlat = np.array(
+        [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] for x in prediction[0]]          
     )
-    predout = pd.DataFrame(prediction)
-    predout.columns = ["x", "y", "cov1", "cov2", "cov3"]
+    prediction_env = np.array(
+        [[x[0] * sdcov1 + meancov1, x[1] * sdcov2 + meancov2, x[2] * sdcov3 + meancov3] for x in prediction[1]]          
+    )
+    predi = pd.DataFrame(prediction_longlat, columns= ['x', 'y'])
+    ction = pd.DataFrame(prediction_env, columns = ["cov1", "cov2", "cov3"])
+    prediction = [predi, ction]
+    predout = pd.concat((prediction), axis=1)
     predout["sampleID"] = samples[pred]
+    testlocs_flat = np.concatenate([testlocs[0], testlocs[1]], axis=1)
     if args.bootstrap or args.jacknife:
         predout.to_csv(args.out + "_boot" + str(boot) + "_predlocs.txt", index=False)
         testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs]
+            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs_flat]
         )
     elif args.windows:
         predout.to_csv(
             args.out + "_" + str(i) + "-" + str(i + size - 1) + "_predlocs.txt",
             index=False,
-        )  # this is dumb
+        )  
         testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs]
+            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs_flat]
         )
     else:
         predout.to_csv(args.out + "_predlocs.txt", index=False)
         testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs]
+            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs_flat]
         )
     p2 = model.predict(testgen)  # print validation loss to screen
+    p2 = np.concatenate([p2[0], p2[1]], axis=1)
     p2 = np.array([[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in p2])
     r2_long = np.corrcoef(p2[:, 0], testlocs2[:, 0])[0][1] ** 2
     r2_lat = np.corrcoef(p2[:, 1], testlocs2[:, 1])[0][1] ** 2
@@ -657,32 +662,9 @@ else:
             pred,
             predgen,
         ) = split_train_test(ac, locs)
-        ### Testing Normalization steps 
-        # locs2 = pd.DataFrame(locs, columns = ["lat", "lon", "cov1", "cov2", "cov3"])
-        # print(type(locs))
-        # print(type(locs2))
-        # print("locs dimensions are")
-        # print(locs2.shape)
-        # print(locs2.head)
-        # print("cov 1 mean is")
-        # print(round(locs2["cov1"].mean()))
-        # print("cov 2 mean is")
-        # print(round(locs2["cov2"].mean()))
-        # print("cov 3 mean is")
-        # print(round(locs2["cov3"].mean()))
-        # exit()
-        ### 
         model = load_network_dual(traingen)
-        #loss_weights=[args.loss]
-        #loss_weights=[args.loc_weight, args.env_weight]
-        #print(loss_weights)
-        #exit()
         start = time.time()
         history, model = train_network(model, traingen, testgen, trainlocs, testlocs)
-        print(ac.shape)
-        print(genotypes.shape)
-        print(locs.shape)
-        #exit()
         dists = predict_locs(
             model,
             predgen,
@@ -704,7 +686,6 @@ else:
         plot_history(history, dists, args.gnuplot)
         if not args.keep_weights:
             subprocess.run("rm " + args.out + "_weights.hdf5", shell=True)
-            ## Do I need to change the above two lines?
         end = time.time()
         elapsed = end - start
         print("run time " + str(elapsed / 60) + " minutes")
