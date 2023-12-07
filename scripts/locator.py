@@ -154,6 +154,12 @@ parser.add_argument(
                     default: False.",
 )
 parser.add_argument(
+    "--load_train_weights", 
+    default=None,
+    type=str,
+    help="path to .hdf5 file to load weights from a prevvious run."
+)
+parser.add_argument(
     "--load_params",
     default=None,
     type=str,
@@ -412,6 +418,15 @@ def load_callbacks(boot):
     if args.bootstrap or args.jacknife:
         checkpointer = tf.keras.callbacks.ModelCheckpoint(
             filepath=args.out + "_boot" + str(boot) + "_weights.hdf5",
+            verbose=args.keras_verbose,
+            save_best_only=True,
+            save_weights_only=True,
+            monitor="val_loss",
+            period=1,
+        )
+    elif args.load_train_weights is not None:
+        checkpointer = tf.keras.callbacks.ModelCheckpoint(
+            filepath=args.load_train_weights,
             verbose=args.keras_verbose,
             save_best_only=True,
             save_weights_only=True,
