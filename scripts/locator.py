@@ -8,6 +8,8 @@ import argparse
 import json
 from tensorflow.keras import backend as K
 
+tf.keras.utils.set_random_seed(812) #unhash this line to set a random seed for reproducibility, but note that reproducibility is not guaranteed across machines or tensorflow versions.
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--vcf", help="VCF with SNPs for all samples.")
 parser.add_argument("--zarr", help="zarr file of SNPs for all samples.")
@@ -154,10 +156,17 @@ parser.add_argument(
                     default: False.",
 )
 parser.add_argument(
-    "--load_train_weights", 
+    "--keep_model",
+    default=False,
+    action="store_true",
+    help="keep model structure and weights after training? \
+                    default: False.",
+)
+parser.add_argument(
+    "--load_train_model", 
     default=None,
     type=str,
-    help="path to .hdf5 file to load weights from a prevvious run."
+    help="path to .keras file to load trained model from a previous run."
 )
 parser.add_argument(
     "--load_params",
@@ -387,11 +396,12 @@ def split_train_test(ac, locs):
 
 def load_network_dual(traingen):
     """
-    creates and load a neural network with two outputs
+    creates and loads a neural network with two outputs
     one for the location and one for the environmental covariates
     """
     from tensorflow.keras import backend as K
 
+    @tf.keras.saving.register_keras_serializable(name="euclid_loss")
     def euclid_loss(y_true, y_pred):
         EL = (K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1)))
         return EL
@@ -415,8 +425,28 @@ def load_network_dual(traingen):
 
 
 def load_callbacks(boot):
-    if args.bootstrap or args.jacknife:
-        checkpointer = tf.keras.callbacks.ModelCheckpoint(
+    if args.keep_model:
+        if args.bootstrap or args.jacknife:
+            checkpointer = tf.keras.callbacks.ModelCheckpoint(
+            filepath=args.out + "_boot" + str(boot) + "_model.keras",
+            verbose=args.keras_verbose,
+            save_weights_only=False,
+            save_best_only=True,
+            monitor="val_loss",
+            period=1, 
+        )
+        else: 
+            checkpointer = tf.keras.callbacks.ModelCheckpoint(
+            filepath=args.out + "_model.keras",
+            verbose=args.keras_verbose,
+            save_weights_only=False,
+            save_best_only=True,
+            monitor="val_loss",
+            period=1,
+        )
+    else:
+        if args.bootstrap or args.jacknife:
+            checkpointer = tf.keras.callbacks.ModelCheckpoint(
             filepath=args.out + "_boot" + str(boot) + "_weights.hdf5",
             verbose=args.keras_verbose,
             save_best_only=True,
@@ -424,17 +454,8 @@ def load_callbacks(boot):
             monitor="val_loss",
             period=1,
         )
-    elif args.load_train_weights is not None:
-        checkpointer = tf.keras.callbacks.ModelCheckpoint(
-            filepath=args.load_train_weights,
-            verbose=args.keras_verbose,
-            save_best_only=True,
-            save_weights_only=True,
-            monitor="val_loss",
-            period=1,
-        )
-    else:
-        checkpointer = tf.keras.callbacks.ModelCheckpoint(
+        else:
+            checkpointer = tf.keras.callbacks.ModelCheckpoint(
             filepath=args.out + "_weights.hdf5",
             verbose=args.keras_verbose,
             save_best_only=True,
@@ -469,10 +490,18 @@ def train_network(model, traingen, testgen, trainlocs, testlocs):
         validation_data=(testgen, testlocs),
         callbacks=[checkpointer, earlystop, reducelr],
     )
-    if args.bootstrap or args.jacknife:
-        model.load_weights(args.out + "_boot" + str(boot) + "_weights.hdf5")
+    if args.keep_model:
+        if args.bootstrap or args.jacknife:
+            tf.keras.models.load_model(args.out + "_boot" + str(boot) + "_model.keras")
+        else: 
+            tf.keras.models.load_model(args.out + "_model.keras")
+    elif args.load_train_model is not None:
+        model = tf.keras.models.load_model(args.load_train_model)
     else:
-        model.load_weights(args.out + "_weights.hdf5")
+        if args.bootstrap or args.jacknife:
+            model.load_weights(args.out + "_boot" + str(boot) + "_weights.hdf5")
+        else:
+            model.load_weights(args.out + "_weights.hdf5")
     return history, model
 
 
