@@ -52,7 +52,7 @@ centroid_method <- args$centroid_method
 # usemap <- T
 # haploid <- F
 
-load("~/locator/data/cntrymap.Rdata")
+load("~/locator_dfir/locator/data/cntrymap.Rdata")
 
 kdepred <- function(xcoords,ycoords){
   try({
@@ -69,32 +69,36 @@ kdepred <- function(xcoords,ycoords){
 }
 
 print("loading data")
-if(grepl("predlocs.txt",infile)){
-  pd <- fread(infile,data.table=F)
-  names(pd) <- c('xpred','ypred','sampleID')
-  files <- infile
-} else {
-  files <- list.files(infile,full.names = T)
-  files <- grep("predlocs",files,value=T)
-  pd <- fread(files[1],data.table=F)[0,1:3]
-  for(f in files){
-    a <- fread(f,data.table = F,header=T)[,1:3]
-    pd <- rbind(pd,a)
-  }
-  names(pd) <- c('xpred','ypred','sampleID')
+files <- list.files(infile, pattern = "predlocs.txt", full.names = TRUE)
+
+if (length(files) == 0) {
+  stop("Error: No files with 'predlocs.txt' found in the specified directory.")
 }
 
-locs <- fread(sample_data,data.table=F)
+# Initialize an empty data frame to store the combined data
+pd <- data.frame()
 
-if(!is.null(samples) && grepl(",",samples)){
-  samples <- unlist(strsplit(samples,","))
-} else if(is.null(samples)){
-  samples <- sample(unique(pd$sampleID),nsamples,replace = F)
+# Loop through each file and read the required columns
+for (file in files) {
+  tmp <- fread(file, select = c('x', 'y', 'sampleID'), data.table = FALSE)
+  pd <- rbind(pd, tmp)
+}
+
+# Rename the columns to match the original format
+names(pd) <- c('xpred', 'ypred', 'sampleID')
+
+locs <- fread(sample_data, data.table = FALSE)
+
+if (!is.null(samples) && grepl(",", samples)) {
+  samples <- unlist(strsplit(samples, ","))
+} else if (is.null(samples)) {
+  samples <- sample(unique(pd$sampleID), nsamples, replace = FALSE)
 } else {
   samples <- args$samples
 }
 
-pd <- merge(pd,locs,by="sampleID")
+pd <- merge(pd, locs, by = "sampleID")
+print(head(pd))
 
 if(error){
   print("calculating error")
