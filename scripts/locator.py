@@ -186,6 +186,13 @@ parser.add_argument(
                     default: 1. ",
 )
 parser.add_argument(
+    "--save_metrics",
+    default=False,
+    action="store_true",
+    help="save metrics (R2 & val. error) to file? \
+                    default: False",
+)
+parser.add_argument(
     "--loc_weight",
     default=1.0,
     type=float,
@@ -504,6 +511,12 @@ def train_network(model, traingen, testgen, trainlocs, testlocs):
             model.load_weights(args.out + "_weights.hdf5")
     return history, model
 
+def get_sample_id(input_file):
+    base_name = os.path.basename(input_file)  # Get the base name, e.g., 'masked_data_RC01_A10_5144.tsv'
+    sample_id = base_name.replace('masked_data_', '').replace('.tsv', '')  # Extract the sample ID, e.g., 'RC01_A10_5144'
+    return sample_id
+
+sample_id = get_sample_id(args.sample_data)
 
 def predict_locs(
     model,
@@ -553,7 +566,7 @@ def predict_locs(
             [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs_flat]
         )
     else:
-        predout.to_csv(args.out + "_predlocs.txt", index=False)
+        predout.to_csv(args.out + sample_id + "_predlocs.txt", index=False)
         testlocs2 = np.array(
             [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat, x[2] * sdcov1 + meancov1, x[3] * sdcov2 + meancov2, x[4] * sdcov3 + meancov3] for x in testlocs_flat]
         )
@@ -574,6 +587,23 @@ def predict_locs(
     dists = [
         spatial.distance.euclidean(p2[x, :], testlocs2[x, :]) for x in range(len(p2))
     ]
+    if args.save_metrics:
+        results_data = {
+            "Sample_ID": sample_id,
+            "R2_x": r2_long,
+            "R2_y": r2_lat,
+            "R2_cov1": r2_cov1,
+            "R2_cov2": r2_cov2,
+            "R2_cov3": r2_cov3,
+            "Mean_Validation_Error": mean_dist,
+            "Median_Validation_Error": median_dist
+        }
+        results_df = pd.DataFrame(results_data, index=[0])
+        metrics_file = os.path.join(args.out + "_metrics.txt")
+        if os.path.exists(metrics_file):
+            results_df.to_csv(metrics_file, sep="\t", index=False, mode="a", header=False)
+        else:
+            results_df.to_csv(metrics_file, sep="\t", index=False, mode='w')
     if verbose == True:
         print(
             "R2(x)="
@@ -595,7 +625,7 @@ def predict_locs(
             + "\n"
         )
     hist = pd.DataFrame(history.history)
-    hist.to_csv(args.out + "_history.txt", sep="\t", index=False)
+    hist.to_csv(args.out + sample_id + "_history.txt", sep="\t", index=False)
     return dists
 
 
