@@ -430,6 +430,12 @@ def load_network_dual(traingen):
     # model.compile(optimizer="Adam", loss=[cust_loss], loss_weights=[args.loss])
     return model
 
+def get_sample_id(input_file):
+    base_name = os.path.basename(input_file)  # Get the base name, e.g., 'masked_data_RC01_A10_5144.tsv'
+    sample_id = base_name.replace('masked_data_', '').replace('.tsv', '')  # Extract the sample ID, e.g., 'RC01_A10_5144'
+    return sample_id
+
+sample_id = get_sample_id(args.sample_data)
 
 def load_callbacks(boot):
     if args.keep_model:
@@ -463,7 +469,7 @@ def load_callbacks(boot):
         )
         else:
             checkpointer = tf.keras.callbacks.ModelCheckpoint(
-            filepath=args.out + "_weights.hdf5",
+            filepath=args.out + sample_id + "_weights.hdf5",
             verbose=args.keras_verbose,
             save_best_only=True,
             save_weights_only=True,
@@ -508,15 +514,9 @@ def train_network(model, traingen, testgen, trainlocs, testlocs):
         if args.bootstrap or args.jacknife:
             model.load_weights(args.out + "_boot" + str(boot) + "_weights.hdf5")
         else:
-            model.load_weights(args.out + "_weights.hdf5")
+            model.load_weights(args.out + sample_id + "_weights.hdf5")
     return history, model
 
-def get_sample_id(input_file):
-    base_name = os.path.basename(input_file)  # Get the base name, e.g., 'masked_data_RC01_A10_5144.tsv'
-    sample_id = base_name.replace('masked_data_', '').replace('.tsv', '')  # Extract the sample ID, e.g., 'RC01_A10_5144'
-    return sample_id
-
-sample_id = get_sample_id(args.sample_data)
 
 def predict_locs(
     model,
@@ -759,7 +759,7 @@ else:
         )
         plot_history(history, dists, args.gnuplot)
         if not args.keep_weights:
-            subprocess.run("rm " + args.out + "_weights.hdf5", shell=True)
+            subprocess.run("rm " + args.out + sample_id + "_weights.hdf5", shell=True)
         end = time.time()
         elapsed = end - start
         print("run time " + str(elapsed / 60) + " minutes")

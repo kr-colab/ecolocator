@@ -69,23 +69,20 @@ kdepred <- function(xcoords,ycoords){
 }
 
 print("loading data")
-files <- list.files(infile, pattern = "predlocs.txt", full.names = TRUE)
-
-if (length(files) == 0) {
-  stop("Error: No files with 'predlocs.txt' found in the specified directory.")
+if(grepl("predlocs.txt",infile)){
+  pd <- fread(infile, select=1:3, data.table=F)
+  names(pd) <- c('xpred','ypred','sampleID')
+  files <- infile
+} else {
+  files <- list.files(infile, select=1:3, full.names = T)
+  files <- grep("predlocs",files,value=T)
+  pd <- fread(files[1],data.table=F)[0,1:3]
+  for(f in files){
+    a <- fread(f, select = 1:3, data.table = F,header=T)[,1:3]
+    pd <- rbind(pd,a)
+  }
+  names(pd) <- c('xpred','ypred','sampleID')
 }
-
-# Initialize an empty data frame to store the combined data
-pd <- data.frame()
-
-# Loop through each file and read the required columns
-for (file in files) {
-  tmp <- fread(file, select = c('x', 'y', 'sampleID'), data.table = FALSE)
-  pd <- rbind(pd, tmp)
-}
-
-# Rename the columns to match the original format
-names(pd) <- c('xpred', 'ypred', 'sampleID')
 
 locs <- fread(sample_data, data.table = FALSE)
 
