@@ -460,7 +460,7 @@ def load_callbacks(boot):
     else:
         if args.bootstrap or args.jacknife:
             checkpointer = tf.keras.callbacks.ModelCheckpoint(
-            filepath=args.out + "_boot" + str(boot) + "_weights.hdf5",
+            filepath=args.out + "_boot" + str(boot) + "_weights.h5",
             verbose=args.keras_verbose,
             save_best_only=True,
             save_weights_only=True,
@@ -469,7 +469,7 @@ def load_callbacks(boot):
         )
         else:
             checkpointer = tf.keras.callbacks.ModelCheckpoint(
-            filepath=args.out + sample_id + "_weights.hdf5",
+            filepath=args.out + sample_id + "_weights.h5",
             verbose=args.keras_verbose,
             save_best_only=True,
             save_weights_only=True,
@@ -512,9 +512,9 @@ def train_network(model, traingen, testgen, trainlocs, testlocs):
         model = tf.keras.models.load_model(args.load_train_model)
     else:
         if args.bootstrap or args.jacknife:
-            model.load_weights(args.out + "_boot" + str(boot) + "_weights.hdf5")
+            model.load_weights(args.out + "_boot" + str(boot) + "_weights.h5")
         else:
-            model.load_weights(args.out + sample_id + "_weights.hdf5")
+            model.load_weights(args.out + sample_id + "_weights.h5")
     return history, model
 
 
@@ -714,7 +714,7 @@ if args.windows:
         )
         plot_history(history, dists, args.gnuplot)
         if not args.keep_weights:
-            subprocess.run("rm " + args.out + "_weights.hdf5", shell=True)
+            subprocess.run("rm " + args.out + "_weights.h5", shell=True)
         t2 = time.time()
         elapsed = t2 - t1
         print("run time " + str(elapsed / 60) + " minutes")
@@ -759,7 +759,7 @@ else:
         )
         plot_history(history, dists, args.gnuplot)
         if not args.keep_weights:
-            subprocess.run("rm " + args.out + sample_id + "_weights.hdf5", shell=True)
+            subprocess.run("rm " + args.out + sample_id + "_weights.h5", shell=True)
         end = time.time()
         elapsed = end - start
         print("run time " + str(elapsed / 60) + " minutes")
@@ -803,7 +803,7 @@ else:
         )
         plot_history(history, dists, args.gnuplot)
         if not args.keep_weights:
-            subprocess.run("rm " + args.out + "_bootFULL_weights.hdf5", shell=True)
+            subprocess.run("rm " + args.out + "_bootFULL_weights.h5", shell=True)
         end = time.time()
         elapsed = end - start
         print("run time " + str(elapsed / 60) + " minutes")
@@ -846,7 +846,7 @@ else:
             plot_history(history, dists, args.gnuplot)
             if not args.keep_weights:
                 subprocess.run(
-                    "rm " + args.out + "_boot" + str(boot) + "_weights.hdf5", shell=True
+                    "rm " + args.out + "_boot" + str(boot) + "_weights.h5", shell=True
                 )
             end = time.time()
             elapsed = end - start
@@ -928,7 +928,7 @@ else:
                 verbose=False,
             )  # TODO: check testgen behavior for printing R2 to screen with jacknife in predict mode
         if not args.keep_weights:
-            subprocess.run("rm " + args.out + "_bootFULL_weights.hdf5", shell=True)
+            subprocess.run("rm " + args.out + "_bootFULL_weights.h5", shell=True)
 
 # ag1000g.phase1.ar3.pass.2L.0-5e6.zarr
 ###debugging params
