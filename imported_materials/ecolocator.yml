@@ -1,0 +1,31 @@
+# conda yml file
+name: ecolocator
+channels:
+  - conda-forge
+  - anaconda
+  - bioconda
+dependencies:
+  - python==3.10
+  - cudatoolkit
+  - cudnn
+  - tensorflow-gpu=2.10
+  - keras
+  - gpustat
+  - numpy
+  - pandas
+  - scipy
+  - ipykernel
+  - matplotlib
+  - h5py
+  - scikit-allel
+  - matplotlib
+  - scipy
+  - tqdm
+  - zarr
+  - seaborn
+  - slim>=4.2.2
+  - pip
+  - pip:
+      - msprime>=1.1.1
+      - tskit>=0.4.1
+      - pyslim
