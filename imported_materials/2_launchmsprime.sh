@@ -11,7 +11,7 @@ if [ ! -d "$OUTDIR" ]; then
     exit 1
 fi
 
-echo "Processing .trees files in $OUTDIR"
+echo "Processing .trees files in ${OUTDIR}"
 
 # Find all .trees files in the OUTDIR and submit jobs
 for TREE_FILE in "$OUTDIR"/*.trees; do
