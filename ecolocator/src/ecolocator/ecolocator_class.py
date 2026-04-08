@@ -1,6 +1,5 @@
 import numpy as np
 import logging
-from typing import Self
 
 
 class EcoLocator:
@@ -20,5 +19,5 @@ class EcoLocator:
 	@staticmethod	
 	def load_from_yaml(
 		yaml_path: str,
-	) -> Self:
+	) -> EcoLocator:
 		assert False, "NOT IMPLEMENTED YET"

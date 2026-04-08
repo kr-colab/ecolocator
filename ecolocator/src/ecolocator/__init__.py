@@ -1,1 +1,2 @@
-from .ecolocator_class import EcoLocator
+def hello() -> str:
+    return "Hello from ecolocator!"
