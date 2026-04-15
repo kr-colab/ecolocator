@@ -16,7 +16,7 @@ dependencies = [
 	"scipy",
 	"tqdm",
 	"pandas",
-	"zarr",
+	"zarr<3",
 	"seaborn",
 	"pytest",
 ]

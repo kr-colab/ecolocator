@@ -1,3 +1,4 @@
+import sys
 import allel
 import zarr
 import numpy as np
@@ -18,8 +19,6 @@ def load_genotypes(zarr_path=None, vcf_path=None, matrix_path=None):
         samples = vcf["samples"]
     elif matrix_path is not None:
         gmat = pd.read_csv(matrix_path, sep="\t")
-        full_snp_ids = gmat.columns.drop("sampleID").tolist()
-        np.savetxt(args.out + sample_id + "_all_snp_ids.txt", full_snp_ids, fmt="%s")
         samples = np.array(gmat["sampleID"])
         gmat = gmat.drop(labels="sampleID", axis=1)
         gmat = np.array(gmat, dtype="int8")
