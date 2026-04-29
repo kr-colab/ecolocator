@@ -80,10 +80,10 @@ def test_sort_samples(example_data):
     ''' testing sort samples returns the expected output with correctly formatted input'''
     vcf_path, _, _, sample_data_path = example_data
     genos_vcf, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
-    sample_data, locs = sort_samples(samples_vcf, sample_data_path, num_covs=1)
+    sample_data, locs = sort_samples(samples_vcf, sample_data_path)
     assert sample_data.shape[0] == len(samples_vcf)
     np.testing.assert_array_equal(sample_data.index, samples_vcf)
-    assert locs.shape == (len(samples_vcf), 3)
+    assert locs.shape == (len(samples_vcf), 5)
     assert not np.any(np.isnan(locs))
 
 def test_sort_samples_errors(example_data, tmp_path):
@@ -101,5 +101,67 @@ def test_sort_samples_errors(example_data, tmp_path):
     bad_df.index.name = "sampleID"
     bad_df.to_csv(tmp_path / "bad_sample_data.tsv", sep="\t", index=True)
     with pytest.raises(ValueError, match="sample ordering failed"):
-        sort_samples(samples_vcf, str(tmp_path / "bad_sample_data.tsv"), num_covs=1)
+        sort_samples(samples_vcf, str(tmp_path / "bad_sample_data.tsv"))
     
+
+def test_sort_samples_no_covs(example_data):
+    ''' testing sort_samples works with no covariates (location prediction only) '''
+    vcf_path, _, _, sample_data_path = example_data
+    _, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+    sample_data, locs = sort_samples(samples_vcf, sample_data_path, covariates=[])
+    assert locs.shape == (len(samples_vcf), 2)
+    assert not np.any(np.isnan(locs))
+
+
+def test_sort_samples_specific_covariates(example_data):
+    ''' testing sort_samples respects an explicit covariate list '''
+    vcf_path, _, _, sample_data_path = example_data
+    _, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+    sample_data, locs = sort_samples(samples_vcf, sample_data_path, covariates=["cov1"])
+    assert locs.shape == (len(samples_vcf), 3)
+    assert not np.any(np.isnan(locs))
+
+
+def test_sort_samples_count_mismatch(example_data, tmp_path):
+    ''' testing sort_samples raises an informative error when sample counts differ but names match '''
+    vcf_path, _, _, _ = example_data
+    _, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+
+    # sample data with only the first 4 of 5 VCF samples — all names valid, one missing
+    subset_ids = list(samples_vcf[:-1])
+    subset_df = pd.DataFrame(
+        np.zeros((len(subset_ids), 3)),
+        index=subset_ids,
+        columns=["x", "y", "cov1"]
+    )
+    subset_df.index.name = "sampleID"
+    subset_df.to_csv(tmp_path / "subset_sample_data.tsv", sep="\t", index=True)
+    with pytest.raises(ValueError, match="counts differ"):
+        sort_samples(samples_vcf, str(tmp_path / "subset_sample_data.tsv"))
+
+
+def test_sort_samples_count_mismatch_more(example_data, tmp_path):
+    ''' testing sort_samples raises an informative error when TSV has more rows than the VCF '''
+    vcf_path, _, _, _ = example_data
+    _, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+
+    # all 5 VCF samples plus one extra
+    extra_ids = list(samples_vcf) + ["extra_sample"]
+    extra_df = pd.DataFrame(
+        np.zeros((len(extra_ids), 3)),
+        index=extra_ids,
+        columns=["x", "y", "cov1"]
+    )
+    extra_df.index.name = "sampleID"
+    extra_df.to_csv(tmp_path / "extra_sample_data.tsv", sep="\t", index=True)
+    with pytest.raises(ValueError, match="counts differ"):
+        sort_samples(samples_vcf, str(tmp_path / "extra_sample_data.tsv"))
+
+
+def test_sort_samples_invalid_covariate(example_data):
+    ''' testing sort_samples raises a clear error when a requested covariate column does not exist '''
+    vcf_path, _, _, sample_data_path = example_data
+    _, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+    with pytest.raises(ValueError, match="not found in sample data"):
+        sort_samples(samples_vcf, sample_data_path, covariates=["nonexistent_col"])
+

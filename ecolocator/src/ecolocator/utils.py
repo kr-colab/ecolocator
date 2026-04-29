@@ -58,21 +58,33 @@ def load_genotypes(
     return genotypes, samples
 
 
-# TODO:
-#   - make doc string
 def sort_samples(
-    samples: np.ndarray, 
-    sample_data_path: str, 
-    num_covs: int=1,
+    samples: np.ndarray,
+    sample_data_path: str,
+    covariates: list = None,
 ) -> (pd.DataFrame, np.ndarray):
     """
-    `sample_data_path` points to a tsv with columns "sampleID", "x", "y", and optionally covariate columns "cov1", "cov2", etc.
+    `sample_data_path` points to a tsv with required columns "sampleID", "x", "y".
+    Any additional columns are treated as covariates unless `covariates` is given.
+
+    Parameters
+    ----------
+    covariates : list of str or None
+        Column names to use as covariates. None (default) uses all columns
+        that are not "sampleID", "x", or "y". Pass [] for no covariates.
     """
-    assert num_covs > 0, "FIXME: can we support 0 covs? (loc pred only)"
     sample_data = pd.read_csv(sample_data_path, sep="\t")
     sample_data["sampleID2"] = sample_data["sampleID"]
     sample_data.set_index("sampleID", inplace=True)
     samples = samples.astype("str")
+    if len(sample_data) != len(samples):
+        vcf_set = set(samples)
+        data_set = set(sample_data.index)
+        if data_set <= vcf_set or vcf_set <= data_set:
+            raise ValueError(
+                f"Sample names match but counts differ: VCF has {len(samples)} "
+                f"samples, sample data has {len(sample_data)} rows."
+            )
     sample_data = sample_data.reindex(
         np.array(samples)
     )  # sort loc table so samples are in same order as vcf samples
@@ -80,7 +92,18 @@ def sort_samples(
         [sample_data["sampleID2"].iloc[x] == samples[x] for x in range(len(samples))]
     ):  # check that all sample names are present
         raise ValueError("sample ordering failed! Check that sample IDs match the VCF.")
-    locs = np.array(sample_data[["x", "y"] + [f"cov{i+1}" for i in range(num_covs)]])
+    if covariates is None:
+        reserved = {"sampleID2", "x", "y"}
+        cov_cols = [c for c in sample_data.columns if c not in reserved]
+    else:
+        missing = [c for c in covariates if c not in sample_data.columns]
+        if missing:
+            raise ValueError(
+                f"Covariate column(s) not found in sample data: {missing}. "
+                f"Available columns: {list(sample_data.columns)}."
+            )
+        cov_cols = list(covariates)
+    locs = np.array(sample_data[["x", "y"] + cov_cols])
     logging.debug(f"Input data:\n{locs}")
     logging.info(f"sorted samples and covariates for {len(samples)} samples")
     return sample_data, locs
