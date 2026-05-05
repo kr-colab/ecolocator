@@ -1,6 +1,5 @@
-import pytest
-
 from ecolocator import EcoLocator
+
 
 def test_ecolocator_init():
     project_path = "test_project"
