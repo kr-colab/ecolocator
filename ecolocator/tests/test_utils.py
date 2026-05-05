@@ -3,7 +3,7 @@ import numpy as np
 import msprime
 import allel
 import pandas as pd
-from ecolocator.utils import load_genotypes, sort_samples
+from ecolocator.utils import load_genotypes, sort_samples, replace_missing_data
 
 
 @pytest.fixture(scope="session")
@@ -165,3 +165,40 @@ def test_sort_samples_invalid_covariate(example_data):
     with pytest.raises(ValueError, match="not found in sample data"):
         sort_samples(samples_vcf, sample_data_path, covariates=["nonexistent_col"])
 
+
+# Testing no missing data -> output should equal input's alt count
+def test_replace_missing_data_no_missing(example_data):
+    '''replace_missing_data on fully-observed data returns same alt counts'''
+    vcf_path, _, _, _ = example_data
+    genos, _ = load_genotypes(vcf_path=str(vcf_path))
+    expected = genos.to_allele_counts()[:, :, 1]
+    result = replace_missing_data(genos)
+    np.testing.assert_array_equal(result, expected)
+
+
+# missing calls are filled, valid values only
+def test_replace_missing_data_fills_missing():
+    '''replace_missing_data fills all missing calls with values in {0, 1, 2}'''
+    gt = allel.GenotypeArray([
+        [[0, 0], [0, 1], [-1, -1], [1, 1]],
+        [[0, 1], [-1, -1], [0, 1], [0, 0]],
+        [[-1, -1], [1, 1], [0, 1], [0, 0]],
+    ])
+    result = replace_missing_data(gt)
+    assert result.shape == (3, 4)
+    assert np.all(np.isin(result, [0, 1, 2]))
+
+
+# test that non-missing positions are not touched
+def test_replace_missing_data_non_missing_unchanged():
+    '''replace_missing_data does not alter observed (non-missing) genotype counts'''
+    gt = allel.GenotypeArray([
+        [[0, 0], [0, 1], [-1, -1], [1, 1]],
+        [[0, 1], [0, 0], [-1, -1], [0, 0]],
+    ])
+    expected = gt.to_allele_counts()[:, :, 1]
+    result = replace_missing_data(gt)
+    # samples 0, 1, 3 have no missing data — counts must be unchanged
+    np.testing.assert_array_equal(result[:, 0], expected[:, 0])
+    np.testing.assert_array_equal(result[:, 1], expected[:, 1])
+    np.testing.assert_array_equal(result[:, 3], expected[:, 3])
