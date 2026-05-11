@@ -7,8 +7,8 @@ import logging
 
 
 def load_genotypes(
-    zarr_path: str = None, 
-    vcf_path: str = None, 
+    zarr_path: str = None,
+    vcf_path: str = None,
     matrix_path: str = None,
 ) -> (allel.GenotypeArray, np.ndarray):
     if zarr_path is not None:
@@ -17,7 +17,7 @@ def load_genotypes(
         gt = callset["calldata/GT"]
         genotypes = allel.GenotypeArray(gt[:])
         samples = callset["samples"][:]
-        positions = callset["variants/POS"]
+        _positions = callset["variants/POS"]
     elif vcf_path is not None:
         logging.info("reading VCF")
         vcf = allel.read_vcf(vcf_path, log=sys.stderr)
@@ -107,3 +107,19 @@ def sort_samples(
     logging.debug(f"Input data:\n{locs}")
     logging.info(f"sorted samples and covariates for {len(samples)} samples")
     return sample_data, locs
+
+
+def replace_missing_data(
+    genotypes: allel.GenotypeArray,
+) -> np.ndarray:
+    logging.info("imputing missing data")
+    dc = genotypes.count_alleles()[:, 1]
+    ac = genotypes.to_allele_counts()[:, :, 1]
+    missingness = genotypes.is_missing()
+    ninds = np.array([np.sum(x) for x in ~missingness])
+    af = dc / (2 * ninds)
+    for i in range(np.shape(ac)[0]):
+        for j in range(np.shape(ac)[1]):
+            if missingness[i, j]:
+                ac[i, j] = np.random.binomial(2, af[i])
+    return ac

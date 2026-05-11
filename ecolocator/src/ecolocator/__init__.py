@@ -1,1 +1,1 @@
-from .ecolocator_class import EcoLocator
+from .ecolocator_class import EcoLocator as EcoLocator
