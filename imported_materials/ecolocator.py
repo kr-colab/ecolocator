@@ -1,7 +1,7 @@
 # estimating sample locations from genotype matrices
 import allel, re, os, matplotlib, sys, zarr, time, subprocess, copy
 import numpy as np, pandas as pd, tensorflow as tf
-from scipy import spatial
+from scipy import spatial, stats
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 import argparse
@@ -221,7 +221,16 @@ parser.add_argument(
     type=int,
     help="number of environmental covariates. default: 3",
 )
+parser.add_argument(
+    "--cov_transforms",
+    default=None,
+    type=str,
+    help="comma-separated transforms for each covariate (e.g. 'none,log,log'). \
+          Valid options: none, log. Default: none for all covariates."
+)
 args = parser.parse_args()
+cov_transforms = [t.strip() for t in args.cov_transforms.split(',')] \
+    if args.cov_transforms else None
 
 # set seed and gpu
 if args.seed is not None:
@@ -358,23 +367,59 @@ def filter_snps(genotypes, samples):
 
     return ac
 
-def normalize_locs(locs):
+def normalize_locs(locs, transforms=None, cov_names=None):
+    num_covs = locs.shape[1] - 2
+    if transforms is None:
+        transforms = ['none'] * num_covs
+    if cov_names is None:
+        cov_names = [f"cov{i+1}" for i in range(num_covs)]
+    valid = {'none', 'log'}
+    unknown = [t for t in transforms if t not in valid]
+    if unknown:
+        raise ValueError(f"Unknown transform(s): {unknown}. Valid options: {sorted(valid)}.")
+    for i, t in enumerate(transforms):
+        if t == 'log':
+            col = locs[:, 2 + i]
+            nonnan = col[~np.isnan(col)]
+            if np.any(nonnan <= 0):
+                raise ValueError(
+                    f"{cov_names[i]} contains non-positive values "
+                    f"(min={nonnan.min():.4f}); log transform requires all values > 0."
+                )
     meanlong = np.nanmean(locs[:, 0])
-    sdlong = np.nanstd(locs[:, 0])
-    meanlat = np.nanmean(locs[:, 1])
-    sdlat = np.nanstd(locs[:, 1])
-    means = np.nanmean(locs[:, 2:], axis=0)
-    sds = np.nanstd(locs[:, 2:], axis=0)
-    locs = np.array(
-        [
-            [
-                (x[0] - meanlong) / sdlong,
-                (x[1] - meanlat) / sdlat,
-            ] + [(x[2 + i] - means[i]) / sds[i] for i in range(args.num_covs)]
-            for x in locs
-        ]
-    )
-    return meanlong, sdlong, meanlat, sdlat, means, sds, locs
+    sdlong   = np.nanstd(locs[:, 0])
+    meanlat  = np.nanmean(locs[:, 1])
+    sdlat    = np.nanstd(locs[:, 1])
+    cov_data = locs[:, 2:].copy().astype(float)
+    for i, t in enumerate(transforms):
+        if t == 'log':
+            cov_data[:, i] = np.log(cov_data[:, i])
+    means = np.nanmean(cov_data, axis=0)
+    sds   = np.nanstd(cov_data, axis=0)
+    for i, t in enumerate(transforms):
+        if t == 'none':
+            raw_col = locs[:, 2 + i]
+            nonnan  = raw_col[~np.isnan(raw_col)]
+            if np.all(nonnan > 0):
+                gap = nonnan.min() / sds[i]
+                skewness = stats.skew(nonnan)
+                if gap < 1.0 and skewness > 1.0:
+                    print(f"WARNING: {cov_names[i]} is strictly positive but the zero boundary "
+                          f"in z-space is only {gap:.2f} units below the training minimum. "
+                          f"Predictions may be negative. "
+                          f"Consider using 'log' for this covariate.")
+    x_norm    = (locs[:, 0] - meanlong) / sdlong
+    y_norm    = (locs[:, 1] - meanlat)  / sdlat
+    cov_norm  = (cov_data - means) / sds
+    norm_locs = np.column_stack([x_norm, y_norm, cov_norm])
+    return meanlong, sdlong, meanlat, sdlat, means, sds, transforms, norm_locs
+
+def back_transform_env(z_array, means, sds, transforms):
+    result = z_array * sds + means
+    for i, t in enumerate(transforms):
+        if t == 'log':
+            result[:, i] = np.exp(result[:, i])
+    return result
 
 def split_train_test(ac, locs, samples):
     train = np.argwhere(~np.isnan(locs[:, 0])).flatten()
@@ -536,6 +581,7 @@ def predict_locs(
     pred,
     samples,
     testgen,
+    transforms,
     verbose=True,
 ):
     if verbose == True:
@@ -544,9 +590,7 @@ def predict_locs(
     prediction_longlat = np.array(
         [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] for x in prediction[0]]          
     )
-    prediction_env = np.array(
-        [[x[i] * sds[i] + means[i] for i in range(args.num_covs)] for x in prediction[1]]          
-    )
+    prediction_env = back_transform_env(prediction[1], means, sds, transforms)
     predi = pd.DataFrame(prediction_longlat, columns= ['x', 'y'])
     ction = pd.DataFrame(prediction_env, columns = [f"cov{i+1}" for i in range(args.num_covs)])
     prediction = [predi, ction]
@@ -555,25 +599,35 @@ def predict_locs(
     testlocs_flat = np.concatenate([testlocs[0], testlocs[1]], axis=1)
     if args.bootstrap or args.jacknife:
         predout.to_csv(args.out + "_boot" + str(boot) + "_predlocs.txt", index=False)
-        testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] + [x[2 + i] * sds[i] + means[i] for i in range(args.num_covs)] for x in testlocs_flat]
-        )
+        testlocs2 = np.column_stack([
+            testlocs_flat[:, 0] * sdlong + meanlong,
+            testlocs_flat[:, 1] * sdlat  + meanlat,
+            back_transform_env(testlocs_flat[:, 2:], means, sds, transforms),
+        ])
     elif args.windows:
         predout.to_csv(
             args.out + "_" + str(i) + "-" + str(i + size - 1) + "_predlocs.txt",
             index=False,
         )  
-        testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] + [x[2 + i] * sds[i] + means[i] for i in range(args.num_covs)] for x in testlocs_flat]
-        )
+        testlocs2 = np.column_stack([
+            testlocs_flat[:, 0] * sdlong + meanlong,
+            testlocs_flat[:, 1] * sdlat  + meanlat,
+            back_transform_env(testlocs_flat[:, 2:], means, sds, transforms),
+        ])
     else:
         predout.to_csv(args.out + sample_id + "_predlocs.txt", index=False)
-        testlocs2 = np.array(
-            [[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] + [x[2 + i] * sds[i] + means[i] for i in range(args.num_covs)] for x in testlocs_flat]
-        )
+        testlocs2 = np.column_stack([
+            testlocs_flat[:, 0] * sdlong + meanlong,
+            testlocs_flat[:, 1] * sdlat  + meanlat,
+            back_transform_env(testlocs_flat[:, 2:], means, sds, transforms),
+        ])
     p2 = model.predict(testgen)  # print validation loss to screen
     p2 = np.concatenate([p2[0], p2[1]], axis=1)
-    p2 = np.array([[x[0] * sdlong + meanlong, x[1] * sdlat + meanlat] + [x[2 + i] * sds[i] + means[i] for i in range(args.num_covs)] for x in p2])
+    p2 = np.column_stack([
+        p2[:, 0] * sdlong + meanlong,
+        p2[:, 1] * sdlat  + meanlat,
+        back_transform_env(p2[:, 2:], means, sds, transforms),
+    ])
     r2_long = np.corrcoef(p2[:, 0], testlocs2[:, 0])[0][1] ** 2
     r2_lat = np.corrcoef(p2[:, 1], testlocs2[:, 1])[0][1] ** 2
     r2_covs = [np.corrcoef(p2[:, 2 + i], testlocs2[:, 2 + i])[0][1] ** 2 for i in range(args.num_covs)]
@@ -657,7 +711,10 @@ if args.windows:
         print(a, b)
         genotypes = allel.GenotypeArray(gt[a:b, :, :])
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, means, sds, locs = normalize_locs(locs)
+        cov_names = [f"cov{i+1}" for i in range(args.num_covs)]
+        meanlong, sdlong, meanlat, sdlat, means, sds, transforms, locs = normalize_locs(
+            locs, transforms=cov_transforms, cov_names=cov_names
+        )
         ac = filter_snps(genotypes, samples)
         checkpointer, earlystop, reducelr = load_callbacks("FULL")
         (
@@ -686,6 +743,7 @@ if args.windows:
             pred,
             samples,
             testgen,
+            transforms,
         )
         plot_history(history, dists, args.gnuplot)
         if not args.keep_weights:
@@ -698,7 +756,10 @@ else:
         boot = None
         genotypes, samples = load_genotypes()
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, means, sds, locs = normalize_locs(locs)
+        cov_names = [f"cov{i+1}" for i in range(args.num_covs)]
+        meanlong, sdlong, meanlat, sdlat, means, sds, transforms, locs = normalize_locs(
+            locs, transforms=cov_transforms, cov_names=cov_names
+        )
         ac = filter_snps(genotypes, samples)
         checkpointer, earlystop, reducelr = load_callbacks("FULL")
         (
@@ -714,8 +775,8 @@ else:
         model = load_network_dual(traingen)
         start = time.time()
         history, model = train_network(model, traingen, testgen, trainlocs, testlocs)
-        np.save("test/traingen_array.npy", traingen)
-        np.save("test/testgen_array.npy", testgen)
+        #np.save("test/traingen_array.npy", traingen)
+        #np.save("test/testgen_array.npy", testgen)
         dists = predict_locs(
             model,
             predgen,
@@ -729,6 +790,7 @@ else:
             pred,
             samples,
             testgen,
+            transforms,
         )
         plot_history(history, dists, args.gnuplot)
         if not args.keep_weights:
@@ -740,7 +802,10 @@ else:
         boot = "FULL"
         genotypes, samples = load_genotypes()
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, means, sds, locs = normalize_locs(locs)
+        cov_names = [f"cov{i+1}" for i in range(args.num_covs)]
+        meanlong, sdlong, meanlat, sdlat, means, sds, transforms, locs = normalize_locs(
+            locs, transforms=cov_transforms, cov_names=cov_names
+        )
         ac = filter_snps(genotypes)
         checkpointer, earlystop, reducelr = load_callbacks("FULL")
         (
@@ -769,6 +834,7 @@ else:
             pred,
             samples,
             testgen,
+            transforms,
         )
         plot_history(history, dists, args.gnuplot)
         if not args.keep_weights:
@@ -821,7 +887,10 @@ else:
         boot = "FULL"
         genotypes, samples = load_genotypes()
         sample_data, locs = sort_samples(samples)
-        meanlong, sdlong, meanlat, sdlat, means, sds, locs = normalize_locs(locs)
+        cov_names = [f"cov{i+1}" for i in range(args.num_covs)]
+        meanlong, sdlong, meanlat, sdlat, means, sds, transforms, locs = normalize_locs(
+            locs, transforms=cov_transforms, cov_names=cov_names
+        )
         ac = filter_snps(genotypes)
         checkpointer, earlystop, reducelr = load_callbacks(boot)
         (
@@ -850,6 +919,7 @@ else:
             pred,
             samples,
             testgen,
+            transforms,
         )
         plot_history(history, dists, args.gnuplot)
         end = time.time()

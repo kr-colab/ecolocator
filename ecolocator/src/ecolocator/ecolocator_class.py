@@ -1,25 +1,270 @@
 import numpy as np
+import pandas as pd
+import os
+import json
 import logging
-from typing import Self
+import tensorflow as tf
+from .utils import load_genotypes, sort_samples, normalize_locs, filter_snps, replace_missing_data, back_transform_env
+from .network import build_network, train_network, euclid_loss
 
 
 class EcoLocator:
     """
-    Docstringer describing class
+    A neural network model for predicting sample locations and environmental
+    covariates from genotype data.
     """
 
     def __init__(
         self,
-        project_path: str = None,  # path to project directory
+        cov_transforms: list = None,
+        nlayers: int = 10,
+        width: int = 256,
+        dropout_prop: float = 0.25,
+        loc_weight: float = 1.0,
+        env_weight: float = 1.0,
     ):
-        self.project_path = project_path
-        logging.info(f"Using project path {self.project_path}")
+        self.cov_transforms = cov_transforms
+        self.nlayers = nlayers
+        self.width = width
+        self.dropout_prop = dropout_prop
+        self.loc_weight = loc_weight
+        self.env_weight = env_weight
 
-    def get_project_path(self) -> str:
-        return self.project_path
+    @classmethod
+    def load(cls, path: str) -> "EcoLocator":
+        with open(os.path.join(path, "params.json")) as f:
+            params = json.load(f)
 
-    @staticmethod
-    def load_from_yaml(
-        yaml_path: str,
-    ) -> Self:
-        assert False, "NOT IMPLEMENTED YET"
+        obj = cls(
+            cov_transforms=params["cov_transforms"],
+            nlayers=params["nlayers"],
+            width=params["width"],
+            dropout_prop=params["dropout_prop"],
+            loc_weight=params["loc_weight"],
+            env_weight=params["env_weight"],
+        )
+
+        arrays = np.load(os.path.join(path, "arrays.npz"))
+        obj.meanlong_ = arrays["meanlong"].item()
+        obj.sdlong_ = arrays["sdlong"].item()
+        obj.meanlat_ = arrays["meanlat"].item()
+        obj.sdlat_ = arrays["sdlat"].item()
+        obj.means_ = arrays["means"]
+        obj.sds_ = arrays["sds"]
+        obj._kept_snp_indices_ = arrays["kept_snp_indices"]
+
+        obj.cov_names_ = params["cov_names"]
+        obj.num_covs_ = params["num_covs"]
+        obj.transforms_ = params["transforms"]
+
+        obj.model_ = tf.keras.models.load_model(
+            os.path.join(path, "model.keras"),
+            custom_objects={"euclid_loss": euclid_loss},
+        )
+
+        return obj
+
+    def save(self, path: str) -> None:
+        os.makedirs(path, exist_ok=True)
+        self.model_.save(os.path.join(path, "model.keras"))
+        np.savez(
+            os.path.join(path, "arrays.npz"),
+            meanlong=self.meanlong_,
+            sdlong=self.sdlong_,
+            meanlat=self.meanlat_,
+            sdlat=self.sdlat_,
+            means=self.means_,
+            sds=self.sds_,
+            kept_snp_indices=self._kept_snp_indices_,
+        )
+        params = {
+            "cov_names": self.cov_names_,
+            "num_covs": self.num_covs_,
+            "transforms": self.transforms_,
+            "cov_transforms": self.cov_transforms,
+            "nlayers": self.nlayers,
+            "width": self.width,
+            "dropout_prop": self.dropout_prop,
+            "loc_weight": self.loc_weight,
+            "env_weight": self.env_weight,
+        }
+        with open(os.path.join(path, "params.json"), "w") as f:
+            json.dump(params, f)
+
+    def fit(
+        self,
+        genotype_path: str,
+        sample_data_path: str,
+        max_epochs: int = 5000,
+        patience: int = 100,
+        batch_size: int = 32,
+        min_mac: int = 2,
+        max_snps: int = None,
+        train_split: float = 0.9,
+        seed: int = None,
+        verbose: int = 1,
+    ) -> "EcoLocator":
+        rng = np.random.default_rng(seed)
+
+        genotypes, samples = self._get_genotypes(genotype_path)
+        sample_data, locs = sort_samples(samples, sample_data_path)
+
+        num_covs = locs.shape[1] - 2
+        cov_names = [c for c in sample_data.columns if c not in {"sampleID2", "x", "y"}]
+        self.cov_names_ = cov_names
+
+        (self.meanlong_, self.sdlong_, self.meanlat_, self.sdlat_,
+        self.means_, self.sds_, self.transforms_, locs) = normalize_locs(
+            locs, transforms=self.cov_transforms, cov_names=cov_names
+        )
+
+        genotypes, self._kept_snp_indices_ = filter_snps(genotypes, min_mac=min_mac, max_snps=max_snps, rng=rng)
+        ac = replace_missing_data(genotypes)
+
+        train = np.argwhere(~np.isnan(locs[:, 0])).flatten()
+        test  = rng.choice(train, round((1 - train_split) * len(train)), replace=False)
+        train = np.array([x for x in train if x not in test])
+
+        traingen  = np.transpose(ac[:, train])
+        testgen   = np.transpose(ac[:, test])
+        trainlocs = [locs[train][:, 0:2], locs[train][:, 2:]]
+        testlocs  = [locs[test][:, 0:2],  locs[test][:, 2:]]
+
+        self.num_covs_ = num_covs
+        self.model_ = build_network(
+            n_snps=traingen.shape[1],
+            num_covs=num_covs,
+            nlayers=self.nlayers,
+            width=self.width,
+            dropout_prop=self.dropout_prop,
+            loc_weight=self.loc_weight,
+            env_weight=self.env_weight,
+        )
+        self.history_ = train_network(
+            self.model_,
+            traingen,
+            testgen,
+            trainlocs,
+            testlocs,
+            max_epochs=max_epochs,
+            batch_size=batch_size,
+            patience=patience,
+            verbose=verbose,
+        )
+        return self 
+
+
+    def predict(
+        self,
+        genotype_path: str,
+        sample_data_path: str,
+    ) -> pd.DataFrame:
+        genotypes, samples = self._get_genotypes(genotype_path)
+        _, locs = sort_samples(samples, sample_data_path)
+
+        genotypes = genotypes[self._kept_snp_indices_, :, :]
+        ac = replace_missing_data(genotypes)
+
+        pred = np.argwhere(np.isnan(locs[:, 0])).flatten()
+        predgen = np.transpose(ac[:, pred])
+
+        prediction = self.model_.predict(predgen)
+
+        pred_longlat = (
+            prediction[0] * np.array([self.sdlong_, self.sdlat_])
+            + np.array([self.meanlong_, self.meanlat_])
+        )
+        pred_env = back_transform_env(
+            prediction[1], self.means_, self.sds_, self.transforms_
+        )
+
+        result = pd.DataFrame(pred_longlat, columns=["x", "y"])
+        cov_cols = pd.DataFrame(pred_env, columns=self.cov_names_)
+        result = pd.concat([result, cov_cols], axis=1)
+        result["sampleID"] = samples[pred]
+        return result
+
+    def fit_predict_loo(
+        self,
+        genotype_path: str,
+        sample_data_path: str,
+        max_epochs: int = 5000,
+        patience: int = 100,
+        batch_size: int = 32,
+        min_mac: int = 2,
+        max_snps: int = None,
+        train_split: float = 0.9,
+        seed: int = None,
+        verbose: int = 1,
+    ) -> pd.DataFrame:    
+        rng = np.random.default_rng(seed)
+        genotypes, samples = self._get_genotypes(genotype_path)
+        sample_data, locs = sort_samples(samples, sample_data_path)
+
+        num_covs = locs.shape[1] - 2
+        cov_names = [c for c in sample_data.columns if c not in {"sampleID2", "x", "y"}]
+
+        genotypes, _ = filter_snps(genotypes, min_mac=min_mac, max_snps=max_snps, rng=rng)
+        ac = replace_missing_data(genotypes)
+
+        known = np.argwhere(~np.isnan(locs[:, 0])).flatten()
+        all_predictions = []
+
+        for i in known:
+            logging.info(f"LOO iteration {i + 1} of {len(known)}: holding out {samples[i]}")
+            loo_locs = locs.copy()
+            loo_locs[i] = np.nan
+
+            (meanlong, sdlong, meanlat, sdlat,
+            means, sds, transforms, norm_locs) = normalize_locs(
+                loo_locs, transforms=self.cov_transforms, cov_names=cov_names
+            )
+
+            train = np.argwhere(~np.isnan(norm_locs[:, 0])).flatten()
+            test  = rng.choice(train, round((1 - train_split) * len(train)), replace=False)
+            train = np.array([x for x in train if x not in test])
+
+            traingen  = np.transpose(ac[:, train])
+            testgen   = np.transpose(ac[:, test])
+            trainlocs = [norm_locs[train][:, 0:2], norm_locs[train][:, 2:]]
+            testlocs  = [norm_locs[test][:, 0:2],  norm_locs[test][:, 2:]]
+            predgen   = np.transpose(ac[:, [i]])
+
+            model = build_network(
+                n_snps=traingen.shape[1],
+                num_covs=num_covs,
+                nlayers=self.nlayers,
+                width=self.width,
+                dropout_prop=self.dropout_prop,
+                loc_weight=self.loc_weight,
+                env_weight=self.env_weight,
+            )
+            train_network(
+                model, traingen, testgen, trainlocs, testlocs,
+                max_epochs=max_epochs, batch_size=batch_size,
+                patience=patience, verbose=verbose,
+            )
+
+            prediction  = model.predict(predgen)
+            pred_longlat = (
+                prediction[0] * np.array([sdlong, sdlat])
+                + np.array([meanlong, meanlat])
+            )
+            pred_env = back_transform_env(prediction[1], means, sds, transforms)
+
+            row = {"sampleID": samples[i], "x": pred_longlat[0, 0], "y": pred_longlat[0, 1]}
+            for j, name in enumerate(cov_names):
+                row[name] = pred_env[0, j]
+            all_predictions.append(row)
+
+        return pd.DataFrame(all_predictions)
+        
+    
+    def _get_genotypes(self, genotype_path: str):
+        if genotype_path.endswith(".zarr"):
+            return load_genotypes(zarr_path=genotype_path)
+        elif genotype_path.endswith((".vcf", ".vcf.gz")):
+            return load_genotypes(vcf_path=genotype_path)
+        else:
+            return load_genotypes(matrix_path=genotype_path)
+
