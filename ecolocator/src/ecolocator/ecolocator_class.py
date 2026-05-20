@@ -4,6 +4,7 @@ import os
 import json
 import logging
 import tensorflow as tf
+import shap
 from .utils import load_genotypes, sort_samples, normalize_locs, filter_snps, replace_missing_data, back_transform_env
 from .network import build_network, train_network, euclid_loss
 
@@ -261,7 +262,76 @@ class EcoLocator:
 
         return pd.DataFrame(all_predictions)
         
-    
+    def shap_values(
+        self,
+        genotype_path: str, 
+        sample_data_path: str,
+        train_genotype_path: str, 
+        train_sample_data_path: str, 
+        background_size: int = 100, 
+        min_maf: float = None,
+        seed: int = None,
+    ) -> pd.DataFrame:
+        if not hasattr(self, "model_"):
+            raise RuntimeError("EcoLocator must be fitted before calling shap_values")
+
+        rng = np.random.default_rng(seed)
+
+        #load and filter training genos for bg
+        train_genotypes, train_samples = self._get_genotypes(train_genotype_path)
+        train_genotypes = train_genotypes[self._kept_snp_indices_, :, :]
+        train_ac = replace_missing_data(train_genotypes)
+        _, train_locs = sort_samples(train_samples, train_sample_data_path)
+        known = np.argwhere(~np.isnan(train_locs[:, 0])).flatten()
+        traingen = np.transpose(train_ac[:, known])
+
+        #load and filter pred genos
+        pred_genotypes, pred_samples = self._get_genotypes(genotype_path)
+        pred_genotypes = pred_genotypes[self._kept_snp_indices_, :, :]
+        pred_ac = replace_missing_data(pred_genotypes)
+        _, pred_locs = sort_samples(pred_samples, sample_data_path)
+        unknown = np.argwhere(np.isnan(pred_locs[:, 0])).flatten()
+        predgen = np.transpose(pred_ac[:, unknown])
+
+        #build bg
+        bg_size = min(background_size, traingen.shape[0])
+        bg_idx = rng.choice(traingen.shape[0], bg_size, replace=False)
+        background = traingen[bg_idx, :]
+
+        #wrap model heads
+        model_loc = tf.keras.Model(inputs=self.model_.input, outputs=self.model_.output[0])
+        model_env = tf.keras.Model(inputs=self.model_.input, outputs=self.model_.output[1])
+
+        #compute shap
+        expl_loc = shap.GradientExplainer(model_loc, background)
+        expl_env = shap.GradientExplainer(model_env, background)
+        shap_loc = expl_loc.shap_values(predgen)
+        shap_env = expl_env.shap_values(predgen)
+
+        snp_ids = self._kept_snp_indices_
+        rows = []
+        for k, sample in enumerate(pred_samples[unknown]):
+            row = {"sampleID": sample}
+            for col_idx, snp_id in enumerate(snp_ids):
+                row[f"{snp_id}_lat"] = shap_loc[k, col_idx, 0]
+                row[f"{snp_id}_lon"] = shap_loc[k, col_idx, 1]
+                for j, cov in enumerate(self.cov_names_):
+                    row[f"{snp_id}_{cov}"] = shap_env[k, col_idx, j]
+            rows.append(row)
+
+        result = pd.DataFrame(rows)
+
+        if min_maf is not None: 
+            af = np.mean(traingen, axis=0)/ 2.0
+            common = af >= min_maf
+            keep_cols = ["sampleID"] + [
+            c for c, flag in zip(result.columns[1:], np.repeat(common, 2 + len(self.cov_names_)))
+            if flag
+        ]
+            result = result[keep_cols]
+
+        return result    
+        
     def _get_genotypes(self, genotype_path: str):
         if genotype_path.endswith(".zarr"):
             return load_genotypes(zarr_path=genotype_path)
