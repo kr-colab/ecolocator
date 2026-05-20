@@ -119,7 +119,7 @@ class EcoLocator:
         )
 
         genotypes, self._kept_snp_indices_ = filter_snps(genotypes, min_mac=min_mac, max_snps=max_snps, rng=rng)
-        ac = replace_missing_data(genotypes)
+        ac = replace_missing_data(genotypes, rng=rng)
 
         train = np.argwhere(~np.isnan(locs[:, 0])).flatten()
         test  = rng.choice(train, round((1 - train_split) * len(train)), replace=False)
@@ -205,13 +205,13 @@ class EcoLocator:
         cov_names = [c for c in sample_data.columns if c not in {"sampleID2", "x", "y"}]
 
         genotypes, _ = filter_snps(genotypes, min_mac=min_mac, max_snps=max_snps, rng=rng)
-        ac = replace_missing_data(genotypes)
+        ac = replace_missing_data(genotypes, rng=rng)
 
         known = np.argwhere(~np.isnan(locs[:, 0])).flatten()
         all_predictions = []
 
-        for i in known:
-            logging.info(f"LOO iteration {i + 1} of {len(known)}: holding out {samples[i]}")
+        for fold, i in enumerate(known, start=1):
+            logging.info(f"LOO iteration {fold} of {len(known)}: holding out {samples[i]}")
             loo_locs = locs.copy()
             loo_locs[i] = np.nan
 
@@ -256,6 +256,8 @@ class EcoLocator:
             for j, name in enumerate(cov_names):
                 row[name] = pred_env[0, j]
             all_predictions.append(row)
+            del model 
+            tf.keras.backend.clear_session()
 
         return pd.DataFrame(all_predictions)
         

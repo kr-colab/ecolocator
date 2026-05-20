@@ -112,6 +112,7 @@ def sort_samples(
 
 def replace_missing_data(
     genotypes: allel.GenotypeArray,
+    rng: np.random.Generator = None
 ) -> np.ndarray:
     logging.info("imputing missing data")
     dc = genotypes.count_alleles()[:, 1]
@@ -122,7 +123,10 @@ def replace_missing_data(
     for i in range(np.shape(ac)[0]):
         for j in range(np.shape(ac)[1]):
             if missingness[i, j]:
-                ac[i, j] = np.random.binomial(2, af[i])
+                if rng is not None:
+                    ac[i, j] = rng.binomial(2, af[i]) 
+                else:
+                    ac[i, j] = np.random.binomial(2, af[i])
     return ac
 
 
