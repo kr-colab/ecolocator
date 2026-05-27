@@ -18,7 +18,11 @@ dependencies = [
 	"pandas",
 	"zarr<3",
 	"seaborn",
+	"typer>=0.12",
 ]
+
+[project.scripts]
+ecolator = "ecolocator.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.11.3,<0.12.0"]

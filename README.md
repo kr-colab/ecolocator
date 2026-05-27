@@ -9,7 +9,51 @@ it and its use can be found at https://elifesciences.org/articles/54507
 
 ### This repository is currently under construction
 
-07/19/2023 - working on ecolocator script changes. 
+07/19/2023 - working on ecolocator script changes.
+
+## Command-line usage
+
+The `ecolocator/` package installs an `ecolator` CLI (built with Typer). All
+commands run from the `ecolocator/` subdirectory under `uv`:
+
+```bash
+cd ecolocator
+uv sync
+uv run ecolator --help
+```
+
+Subcommands:
+
+- `ecolator train` — fit a model and save it to an output directory.
+- `ecolator predict` — *(stub, not yet implemented)* predict locations and
+  covariates for samples with NA coordinates.
+- `ecolator loo` — *(stub, not yet implemented)* leave-one-out fit-and-predict
+  over all known-location samples.
+
+### `ecolator train`
+
+Trains an `EcoLocator` model on a genotype file plus a sample-metadata TSV and
+writes the fitted model (`model.keras`, `arrays.npz`, `params.json`) to a
+directory:
+
+```bash
+uv run ecolator train \
+    --genotypes data/test_genotypes.vcf.gz \
+    --sample-data data/test_sample_data.txt \
+    --out out/test_model
+```
+
+Genotype input may be `.vcf`, `.vcf.gz`, `.zarr`, or a dosage-matrix TSV. The
+sample-metadata TSV must have `sampleID`, `x`, `y`, plus one column per
+environmental covariate; use `NA` for `x`/`y` of samples whose location is to be
+predicted.
+
+Hyperparameter and training flags mirror the `EcoLocator` API:
+`--nlayers`, `--width`, `--dropout-prop`, `--loc-weight`, `--env-weight`,
+`--cov-transforms` (comma-separated per-covariate, e.g. `none,log,log`),
+`--max-epochs`, `--patience`, `--batch-size`, `--min-mac`, `--max-snps`,
+`--train-split`, `--seed`, `--verbose`. Run `uv run ecolator train --help` for
+the full list.
 
 ----
 
