@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 from ecolocator import EcoLocator
 
 def test_fit_returns_self(example_data):
@@ -33,6 +34,7 @@ def test_fit_sets_attributes(example_data):
     assert hasattr(model, "means_")
     assert hasattr(model, "meanlong_")
     assert hasattr(model, "_kept_snp_indices_")
+    assert hasattr(model, "seed_")
     assert model.num_covs_ == 3
     assert model.cov_names_ == ["cov1", "cov2", "cov3"]
 
@@ -124,7 +126,7 @@ def test_save_load_roundtrip(tmp_path, example_data):
     assert np.isclose(loaded.meanlong_, model.meanlong_)
     assert np.isclose(loaded.meanlat_, model.meanlat_)
     np.testing.assert_array_equal(loaded._kept_snp_indices_, model._kept_snp_indices_)
-
+    assert loaded.seed_ == model.seed_
 
 def test_load_predict_matches(tmp_path, example_data):
     """a model loaded from disk produces a valid prediction DataFrame"""
@@ -152,3 +154,84 @@ def test_load_predict_matches(tmp_path, example_data):
 
     assert isinstance(result, pd.DataFrame)
     assert list(result.columns) == ["x", "y", "cov1", "cov2", "cov3", "sampleID"]
+
+def test_shap_values_not_fitted_raises(example_data):
+    """testing that shap_values() raises RuntimeError if called before fit()"""
+    _, _, matrix_path, sample_data_path = example_data
+    model = EcoLocator(nlayers=2, width=32)
+    with pytest.raises(RuntimeError):
+        model.shap_values(
+            str(matrix_path),
+            str(sample_data_path),
+            str(matrix_path),
+            str(sample_data_path),
+        )
+
+
+def test_shap_values_returns_dataframe(example_data, tmp_path):
+    """testing that shap_values() returns a DataFrame with one row per unknown sample"""
+    _, _, matrix_path, sample_data_path = example_data
+    model = EcoLocator(nlayers=2, width=32)
+    model.fit(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=5,
+        patience=3,
+        train_split=0.6,
+        min_mac=1,
+    )
+
+    sample_data = pd.read_csv(sample_data_path, sep="\t")
+    sample_data.iloc[0, 1:] = np.nan
+    masked_path = tmp_path / "masked.tsv"
+    sample_data.to_csv(masked_path, sep="\t", index=False)
+
+    result = model.shap_values(
+        str(matrix_path),
+        str(masked_path),
+        str(matrix_path),
+        str(sample_data_path),
+    )
+
+    n_snps = len(model._kept_snp_indices_)
+    expected_cols = 1 + n_snps * (2 + len(model.cov_names_))
+    snp_ids_in_cols = set(int(c.split("_")[0]) for c in result.columns if c != "sampleID")
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 1
+    assert "sampleID" in result.columns
+    assert len(result.columns) == expected_cols
+    assert snp_ids_in_cols == set(model._kept_snp_indices_)
+
+def test_shap_values_min_maf_filters_columns(example_data, tmp_path):
+    """testing that shap_values() with min_maf filters out low-frequency SNPs"""
+    _, _, matrix_path, sample_data_path = example_data
+    model = EcoLocator(nlayers=2, width=32)
+    model.fit(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=5,
+        patience=3,
+        train_split=0.6,
+        min_mac=1,
+    )
+
+    sample_data = pd.read_csv(sample_data_path, sep="\t")
+    sample_data.iloc[0, 1:] = np.nan
+    masked_path = tmp_path / "masked.tsv"
+    sample_data.to_csv(masked_path, sep="\t", index=False)
+
+    result_unfiltered = model.shap_values(
+        str(matrix_path),
+        str(masked_path),
+        str(matrix_path),
+        str(sample_data_path),
+    )
+    result_filtered = model.shap_values(
+        str(matrix_path),
+        str(masked_path),
+        str(matrix_path),
+        str(sample_data_path),
+        min_maf=0.4,
+    )
+
+    assert len(result_filtered.columns) < len(result_unfiltered.columns)
