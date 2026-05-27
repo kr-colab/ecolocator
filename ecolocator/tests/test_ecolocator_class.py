@@ -34,6 +34,7 @@ def test_fit_sets_attributes(example_data):
     assert hasattr(model, "means_")
     assert hasattr(model, "meanlong_")
     assert hasattr(model, "_kept_snp_indices_")
+    assert hasattr(model, "seed_")
     assert model.num_covs_ == 3
     assert model.cov_names_ == ["cov1", "cov2", "cov3"]
 
@@ -125,7 +126,7 @@ def test_save_load_roundtrip(tmp_path, example_data):
     assert np.isclose(loaded.meanlong_, model.meanlong_)
     assert np.isclose(loaded.meanlat_, model.meanlat_)
     np.testing.assert_array_equal(loaded._kept_snp_indices_, model._kept_snp_indices_)
-
+    assert loaded.seed_ == model.seed_
 
 def test_load_predict_matches(tmp_path, example_data):
     """a model loaded from disk produces a valid prediction DataFrame"""

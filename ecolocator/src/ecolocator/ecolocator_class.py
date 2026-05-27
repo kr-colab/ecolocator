@@ -4,7 +4,6 @@ import os
 import json
 import logging
 import tensorflow as tf
-import shap
 from .utils import load_genotypes, sort_samples, normalize_locs, filter_snps, replace_missing_data, back_transform_env
 from .network import build_network, train_network, euclid_loss
 
@@ -55,6 +54,7 @@ class EcoLocator:
         obj._kept_snp_indices_ = arrays["kept_snp_indices"]
 
         obj.cov_names_ = params["cov_names"]
+        obj.seed_ = params["seed"]
         obj.num_covs_ = params["num_covs"]
         obj.transforms_ = params["transforms"]
 
@@ -79,6 +79,7 @@ class EcoLocator:
             kept_snp_indices=self._kept_snp_indices_,
         )
         params = {
+            "seed": self.seed_,
             "cov_names": self.cov_names_,
             "num_covs": self.num_covs_,
             "transforms": self.transforms_,
@@ -132,6 +133,7 @@ class EcoLocator:
         testlocs  = [locs[test][:, 0:2],  locs[test][:, 2:]]
 
         self.num_covs_ = num_covs
+        self.seed_ = seed 
         self.model_ = build_network(
             n_snps=traingen.shape[1],
             num_covs=num_covs,
@@ -272,15 +274,16 @@ class EcoLocator:
         min_maf: float = None,
         seed: int = None,
     ) -> pd.DataFrame:
+        import shap
         if not hasattr(self, "model_"):
             raise RuntimeError("EcoLocator must be fitted before calling shap_values")
 
-        rng = np.random.default_rng(seed)
+        rng = np.random.default_rng(seed if seed is not None else self.seed_)
 
         #load and filter training genos for bg
         train_genotypes, train_samples = self._get_genotypes(train_genotype_path)
         train_genotypes = train_genotypes[self._kept_snp_indices_, :, :]
-        train_ac = replace_missing_data(train_genotypes)
+        train_ac = replace_missing_data(train_genotypes, rng=rng)
         _, train_locs = sort_samples(train_samples, train_sample_data_path)
         known = np.argwhere(~np.isnan(train_locs[:, 0])).flatten()
         traingen = np.transpose(train_ac[:, known])
@@ -313,8 +316,8 @@ class EcoLocator:
         for k, sample in enumerate(pred_samples[unknown]):
             row = {"sampleID": sample}
             for col_idx, snp_id in enumerate(snp_ids):
-                row[f"{snp_id}_lat"] = shap_loc[k, col_idx, 0]
-                row[f"{snp_id}_lon"] = shap_loc[k, col_idx, 1]
+                row[f"{snp_id}_x"] = shap_loc[k, col_idx, 0]
+                row[f"{snp_id}_y"] = shap_loc[k, col_idx, 1]
                 for j, cov in enumerate(self.cov_names_):
                     row[f"{snp_id}_{cov}"] = shap_env[k, col_idx, j]
             rows.append(row)
@@ -323,7 +326,8 @@ class EcoLocator:
 
         if min_maf is not None: 
             af = np.mean(traingen, axis=0)/ 2.0
-            common = af >= min_maf
+            maf = np.minimum(af, 1 - af)
+            common = maf >= min_maf
             keep_cols = ["sampleID"] + [
             c for c, flag in zip(result.columns[1:], np.repeat(common, 2 + len(self.cov_names_)))
             if flag
