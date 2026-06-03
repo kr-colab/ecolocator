@@ -7,53 +7,98 @@ genotype or sequencing data. This work is an extension of
 which the manuscript describing 
 it and its use can be found at https://elifesciences.org/articles/54507
 
-### This repository is currently under construction
-
-07/19/2023 - working on ecolocator script changes.
-
-## Command-line usage
-
-The `ecolocator/` package installs an `ecolator` CLI (built with Typer). All
-commands run from the `ecolocator/` subdirectory under `uv`:
+## Installation
 
 ```bash
 cd ecolocator
 uv sync
-uv run ecolator --help
+```
+
+## Command-line usage
+
+The `ecolocator/` package installs an `ecolocator` CLI (built with Typer). All
+commands can be run with `uv run` or by activating the virtual environment first:
+
+```bash
+# option A — activate once, then use the short name
+source .venv/bin/activate
+ecolocator --help
+
+# option B — run without activating
+uv run ecolocator --help
 ```
 
 Subcommands:
 
-- `ecolator train` — fit a model and save it to an output directory.
-- `ecolator predict` — *(stub, not yet implemented)* predict locations and
-  covariates for samples with NA coordinates.
-- `ecolator loo` — *(stub, not yet implemented)* leave-one-out fit-and-predict
-  over all known-location samples.
+- `ecolocator train` — fit a model and save it to an output directory.
+- `ecolocator predict` — predict locations and covariates for samples with unknown coordinates, using a saved model.
+- `ecolocator loo` — leave-one-out cross-validation: iteratively hold out each sample, train, and predict.
 
-### `ecolator train`
+---
+
+### `ecolocator train`
 
 Trains an `EcoLocator` model on a genotype file plus a sample-metadata TSV and
 writes the fitted model (`model.keras`, `arrays.npz`, `params.json`) to a
 directory:
 
 ```bash
-uv run ecolator train \
-    --genotypes data/test_genotypes.vcf.gz \
-    --sample-data data/test_sample_data.txt \
-    --out out/test_model
+ecolocator train \
+    --genotypes data/genotypes.tsv \
+    --sample-data data/sample_data.tsv \
+    --out out/my_model/
 ```
 
 Genotype input may be `.vcf`, `.vcf.gz`, `.zarr`, or a dosage-matrix TSV. The
-sample-metadata TSV must have `sampleID`, `x`, `y`, plus one column per
-environmental covariate; use `NA` for `x`/`y` of samples whose location is to be
-predicted.
+sample-metadata TSV must have columns `sampleID`, `x`, `y`, plus one column per
+environmental covariate. Leave `x`/`y` blank (or `NA`) for samples whose
+location is to be predicted.
 
-Hyperparameter and training flags mirror the `EcoLocator` API:
-`--nlayers`, `--width`, `--dropout-prop`, `--loc-weight`, `--env-weight`,
-`--cov-transforms` (comma-separated per-covariate, e.g. `none,log,log`),
-`--max-epochs`, `--patience`, `--batch-size`, `--min-mac`, `--max-snps`,
-`--train-split`, `--seed`, `--verbose`. Run `uv run ecolator train --help` for
-the full list.
+Hyperparameter and training flags: `--nlayers`, `--width`, `--dropout-prop`,
+`--loc-weight`, `--env-weight`, `--cov-transforms` (comma-separated
+per-covariate, e.g. `none,log,log`), `--max-epochs`, `--patience`,
+`--batch-size`, `--min-mac`, `--max-snps`, `--train-split`, `--seed`,
+`--verbose`. Run `ecolocator train --help` for the full list.
+
+---
+
+### `ecolocator predict`
+
+Loads a saved model and predicts locations and covariates for samples whose
+`x`/`y` are missing in the sample-metadata file. Pass the **same masked
+sample-data file** to both `train` and `predict` — `train` ignores the masked
+rows during fitting, and `predict` returns predictions only for those rows:
+
+```bash
+ecolocator predict \
+    --model out/my_model/ \
+    --genotypes data/genotypes.tsv \
+    --sample-data data/sample_data_masked.tsv \
+    --out out/predictions.tsv
+```
+
+Output is a tab-separated file with columns `sampleID`, `x`, `y`, and one
+column per covariate.
+
+---
+
+### `ecolocator loo`
+
+Runs leave-one-out cross-validation over all samples. Pass the **full**
+sample-metadata file (all coordinates known) — the method handles masking
+internally, holding out one sample per fold, training a model, and predicting
+that sample. Results are checkpointed after every fold:
+
+```bash
+ecolocator loo \
+    --genotypes data/genotypes.tsv \
+    --sample-data data/sample_data.tsv \
+    --out out/loo_predictions.tsv
+```
+
+Use `--max-folds N` to run only the first N folds, useful for a quick
+smoke-test before committing to a full run. All training hyperparameter flags
+are identical to `train`.
 
 ----
 

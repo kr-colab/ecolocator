@@ -104,6 +104,22 @@ def test_fit_predict_loo_returns_all_samples(example_data):
     assert len(result) == len(sample_data)
     assert "sampleID" in result.columns
 
+def test_fit_predict_loo_max_folds(example_data):
+    """fit_predict_loo() with max_folds returns exactly that many prediction rows"""
+    _, _, matrix_path, sample_data_path = example_data
+    model = EcoLocator(nlayers=2, width=32)
+    result = model.fit_predict_loo(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=5,
+        patience=3,
+        train_split=0.6,
+        min_mac=1,
+        max_folds=2,
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 2
+
 def test_save_load_roundtrip(tmp_path, example_data):
     """save() and load() round-trip restores all attributes and hyperparameters"""
     _, _, matrix_path, sample_data_path = example_data
