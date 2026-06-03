@@ -60,7 +60,7 @@ def test_predict_returns_dataframe(example_data, tmp_path):
     result = model.predict(str(matrix_path), str(masked_path))
 
     assert isinstance(result, pd.DataFrame)
-    assert list(result.columns) == ["x", "y", "cov1", "cov2", "cov3", "sampleID"]
+    assert list(result.columns) == ["sampleID", "x", "y", "cov1", "cov2", "cov3"]
     assert len(result) == 1
 
 def test_predict_positive_with_log_transform(example_data, tmp_path):
@@ -103,6 +103,22 @@ def test_fit_predict_loo_returns_all_samples(example_data):
     assert isinstance(result, pd.DataFrame)
     assert len(result) == len(sample_data)
     assert "sampleID" in result.columns
+
+def test_fit_predict_loo_max_folds(example_data):
+    """fit_predict_loo() with max_folds returns exactly that many prediction rows"""
+    _, _, matrix_path, sample_data_path = example_data
+    model = EcoLocator(nlayers=2, width=32)
+    result = model.fit_predict_loo(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=5,
+        patience=3,
+        train_split=0.6,
+        min_mac=1,
+        max_folds=2,
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 2
 
 def test_save_load_roundtrip(tmp_path, example_data):
     """save() and load() round-trip restores all attributes and hyperparameters"""
@@ -153,7 +169,7 @@ def test_load_predict_matches(tmp_path, example_data):
     result = loaded.predict(str(matrix_path), str(masked_path))
 
     assert isinstance(result, pd.DataFrame)
-    assert list(result.columns) == ["x", "y", "cov1", "cov2", "cov3", "sampleID"]
+    assert list(result.columns) == ["sampleID", "x", "y", "cov1", "cov2", "cov3"]
 
 def test_shap_values_not_fitted_raises(example_data):
     """testing that shap_values() raises RuntimeError if called before fit()"""
