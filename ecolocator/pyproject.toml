@@ -35,3 +35,10 @@ dev = [
 	"pytest",
 	"ruff"
 ]
+docs = [
+	"sphinx>=7.0",
+	"myst-parser[linkify]>=2.0",
+	"pydata-sphinx-theme>=0.15",
+	"sphinx-copybutton>=0.5",
+	"sphinx-design>=0.5",
+]
