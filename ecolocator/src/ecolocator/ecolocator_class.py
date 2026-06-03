@@ -184,7 +184,7 @@ class EcoLocator:
         result = pd.DataFrame(pred_longlat, columns=["x", "y"])
         cov_cols = pd.DataFrame(pred_env, columns=self.cov_names_)
         result = pd.concat([result, cov_cols], axis=1)
-        result["sampleID"] = samples[pred]
+        result.insert(0, "sampleID", samples[pred])
         return result
 
     def fit_predict_loo(

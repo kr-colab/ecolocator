@@ -60,7 +60,7 @@ def test_predict_returns_dataframe(example_data, tmp_path):
     result = model.predict(str(matrix_path), str(masked_path))
 
     assert isinstance(result, pd.DataFrame)
-    assert list(result.columns) == ["x", "y", "cov1", "cov2", "cov3", "sampleID"]
+    assert list(result.columns) == ["sampleID", "x", "y", "cov1", "cov2", "cov3"]
     assert len(result) == 1
 
 def test_predict_positive_with_log_transform(example_data, tmp_path):
@@ -169,7 +169,7 @@ def test_load_predict_matches(tmp_path, example_data):
     result = loaded.predict(str(matrix_path), str(masked_path))
 
     assert isinstance(result, pd.DataFrame)
-    assert list(result.columns) == ["x", "y", "cov1", "cov2", "cov3", "sampleID"]
+    assert list(result.columns) == ["sampleID", "x", "y", "cov1", "cov2", "cov3"]
 
 def test_shap_values_not_fitted_raises(example_data):
     """testing that shap_values() raises RuntimeError if called before fit()"""
