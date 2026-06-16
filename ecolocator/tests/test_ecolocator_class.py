@@ -185,7 +185,7 @@ def test_shap_values_not_fitted_raises(example_data):
 
 
 def test_shap_values_returns_dataframe(example_data, tmp_path):
-    """testing that shap_values() returns a DataFrame with one row per unknown sample"""
+    """testing that shap_values() returns a summary DataFrame with one row per SNP"""
     _, _, matrix_path, sample_data_path = example_data
     model = EcoLocator(nlayers=2, width=32)
     model.fit(
@@ -210,13 +210,11 @@ def test_shap_values_returns_dataframe(example_data, tmp_path):
     )
 
     n_snps = len(model._kept_snp_indices_)
-    expected_cols = 1 + n_snps * (2 + len(model.cov_names_))
-    snp_ids_in_cols = set(int(c.split("_")[0]) for c in result.columns if c != "sampleID")
+    expected_cols = ["snp_id", "x", "y"] + model.cov_names_
     assert isinstance(result, pd.DataFrame)
-    assert len(result) == 1
-    assert "sampleID" in result.columns
-    assert len(result.columns) == expected_cols
-    assert snp_ids_in_cols == set(model._kept_snp_indices_)
+    assert len(result) == n_snps
+    assert list(result.columns) == expected_cols
+    assert set(result["snp_id"]) == set(model._kept_snp_indices_)
 
 def test_shap_values_min_maf_filters_columns(example_data, tmp_path):
     """testing that shap_values() with min_maf filters out low-frequency SNPs"""
@@ -250,4 +248,38 @@ def test_shap_values_min_maf_filters_columns(example_data, tmp_path):
         min_maf=0.4,
     )
 
-    assert len(result_filtered.columns) < len(result_unfiltered.columns)
+    assert len(result_filtered) < len(result_unfiltered)
+
+
+def test_shap_values_raw_returns_wide_format(example_data, tmp_path):
+    """shap_values() with raw=True returns one row per unknown sample with all SNP×variable columns"""
+    _, _, matrix_path, sample_data_path = example_data
+    model = EcoLocator(nlayers=2, width=32)
+    model.fit(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=5,
+        patience=3,
+        train_split=0.6,
+        min_mac=1,
+    )
+
+    sample_data = pd.read_csv(sample_data_path, sep="\t")
+    sample_data.iloc[0, 1:] = np.nan
+    masked_path = tmp_path / "masked.tsv"
+    sample_data.to_csv(masked_path, sep="\t", index=False)
+
+    result = model.shap_values(
+        str(matrix_path),
+        str(masked_path),
+        str(matrix_path),
+        str(sample_data_path),
+        raw=True,
+    )
+
+    n_snps = len(model._kept_snp_indices_)
+    expected_n_cols = 1 + n_snps * (2 + len(model.cov_names_))
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 1
+    assert "sampleID" in result.columns
+    assert len(result.columns) == expected_n_cols

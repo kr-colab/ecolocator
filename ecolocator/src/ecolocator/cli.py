@@ -210,5 +210,89 @@ def loo(
     typer.echo(f"LOO complete: {len(result)} predictions → {out}")
 
 
+@app.command()
+def attribute(
+    model: Path = typer.Option(
+        ...,
+        "--model",
+        "-m",
+        exists=True,
+        file_okay=False,
+        help="Directory containing a saved EcoLocator model (from `ecolocator train`).",
+    ),
+    genotypes: Path = typer.Option(
+        ...,
+        "--genotypes",
+        "-g",
+        exists=True,
+        readable=True,
+        help="Genotype input: .vcf, .vcf.gz, .zarr, or dosage-matrix TSV.",
+    ),
+    sample_data: Path = typer.Option(
+        ...,
+        "--sample-data",
+        "-s",
+        exists=True,
+        readable=True,
+        dir_okay=False,
+        help="Sample metadata TSV. Rows with missing x/y are attributed; remaining rows form the background.",
+    ),
+    out: Path = typer.Option(
+        ...,
+        "--out",
+        "-o",
+        dir_okay=False,
+        help="Output TSV path for mean absolute SHAP summary (rows=SNPs, cols=output variables).",
+    ),
+    background_size: int = typer.Option(
+        100,
+        help="Number of training samples to use as SHAP background. Larger values are slower but more stable.",
+    ),
+    min_maf: Optional[float] = typer.Option(
+        None,
+        help="Exclude SNPs below this minor allele frequency from the output.",
+    ),
+    save_raw: bool = typer.Option(
+        False,
+        "--save-raw",
+        help="Also save the per-sample raw SHAP values to <out-stem>_raw.tsv.",
+    ),
+    seed: Optional[int] = typer.Option(None, help="RNG seed for background sampling."),
+) -> None:
+    """Attribute SNP importance for samples with unknown coordinates using SHAP."""
+    from .ecolocator_class import EcoLocator
+
+    el = EcoLocator.load(str(model))
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    result = el.shap_values(
+        genotype_path=str(genotypes),
+        sample_data_path=str(sample_data),
+        train_genotype_path=str(genotypes),
+        train_sample_data_path=str(sample_data),
+        background_size=background_size,
+        min_maf=min_maf,
+        seed=seed,
+        raw=False,
+    )
+    result.to_csv(out, sep="\t", index=False)
+    typer.echo(f"Attributed {len(result)} SNPs → {out}")
+
+    if save_raw:
+        raw_result = el.shap_values(
+            genotype_path=str(genotypes),
+            sample_data_path=str(sample_data),
+            train_genotype_path=str(genotypes),
+            train_sample_data_path=str(sample_data),
+            background_size=background_size,
+            min_maf=min_maf,
+            seed=seed,
+            raw=True,
+        )
+        raw_out = out.with_stem(out.stem + "_raw")
+        raw_result.to_csv(raw_out, sep="\t", index=False)
+        typer.echo(f"Raw SHAP values → {raw_out}")
+
+
 if __name__ == "__main__":
     app()

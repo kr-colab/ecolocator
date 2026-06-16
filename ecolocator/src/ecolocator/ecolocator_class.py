@@ -276,6 +276,7 @@ class EcoLocator:
         background_size: int = 100, 
         min_maf: float = None,
         seed: int = None,
+        raw: bool = False,
     ) -> pd.DataFrame:
         import shap
         if not hasattr(self, "model_"):
@@ -315,29 +316,45 @@ class EcoLocator:
         shap_env = expl_env.shap_values(predgen)
 
         snp_ids = self._kept_snp_indices_
-        rows = []
-        for k, sample in enumerate(pred_samples[unknown]):
-            row = {"sampleID": sample}
-            for col_idx, snp_id in enumerate(snp_ids):
-                row[f"{snp_id}_x"] = shap_loc[k, col_idx, 0]
-                row[f"{snp_id}_y"] = shap_loc[k, col_idx, 1]
-                for j, cov in enumerate(self.cov_names_):
-                    row[f"{snp_id}_{cov}"] = shap_env[k, col_idx, j]
-            rows.append(row)
 
-        result = pd.DataFrame(rows)
-
-        if min_maf is not None: 
-            af = np.mean(traingen, axis=0)/ 2.0
+        # apply min_maf filter to snp index list before building either format
+        if min_maf is not None:
+            af = np.mean(traingen, axis=0) / 2.0
             maf = np.minimum(af, 1 - af)
-            common = maf >= min_maf
-            keep_cols = ["sampleID"] + [
-            c for c, flag in zip(result.columns[1:], np.repeat(common, 2 + len(self.cov_names_)))
-            if flag
-        ]
-            result = result[keep_cols]
+            mask = maf >= min_maf
+            snp_ids = snp_ids[mask]
+            shap_loc = shap_loc[:, mask, :]
+            shap_env = shap_env[:, mask, :]
 
-        return result    
+        n_samples = predgen.shape[0]
+        if n_samples == 1:
+            logging.warning(
+                "Attributing 1 sample — output is absolute SHAP values "
+                "for that sample, not a mean across multiple samples."
+            )
+
+        if raw:
+            rows = []
+            for k, sample in enumerate(pred_samples[unknown]):
+                row = {"sampleID": sample}
+                for col_idx, snp_id in enumerate(snp_ids):
+                    row[f"{snp_id}_x"] = shap_loc[k, col_idx, 0]
+                    row[f"{snp_id}_y"] = shap_loc[k, col_idx, 1]
+                    for j, cov in enumerate(self.cov_names_):
+                        row[f"{snp_id}_{cov}"] = shap_env[k, col_idx, j]
+                rows.append(row)
+            return pd.DataFrame(rows)
+
+        # default: mean absolute SHAP summary — rows=SNPs, cols=output variables
+        output_cols = ["x", "y"] + self.cov_names_
+        summary = {"snp_id": snp_ids}
+        for var_idx, var in enumerate(output_cols):
+            if var_idx < 2:
+                vals = shap_loc[:, :, var_idx]   # shape (n_samples, n_snps)
+            else:
+                vals = shap_env[:, :, var_idx - 2]
+            summary[var] = np.abs(vals).mean(axis=0)
+        return pd.DataFrame(summary)
         
     def _get_genotypes(self, genotype_path: str):
         if genotype_path.endswith(".zarr"):
