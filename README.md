@@ -33,6 +33,7 @@ Subcommands:
 - `ecolocator train` — fit a model and save it to an output directory.
 - `ecolocator predict` — predict locations and covariates for samples with unknown coordinates, using a saved model.
 - `ecolocator loo` — leave-one-out cross-validation: iteratively hold out each sample, train, and predict.
+- `ecolocator attribute` — attribute SNP importance for predicted samples using SHAP.
 
 ---
 
@@ -99,6 +100,32 @@ ecolocator loo \
 Use `--max-folds N` to run only the first N folds, useful for a quick
 smoke-test before committing to a full run. All training hyperparameter flags
 are identical to `train`.
+
+---
+
+### `ecolocator attribute`
+
+Loads a saved model and computes SNP importance scores for samples with unknown
+coordinates using SHAP. Pass the **same masked sample-data file** as used for
+`predict` — rows with known coordinates form the background for SHAP, rows with
+missing `x`/`y` are the samples being attributed:
+
+```bash
+ecolocator attribute \
+    --model out/my_model/ \
+    --genotypes data/genotypes.tsv \
+    --sample-data data/sample_data_masked.tsv \
+    --out out/attributions.tsv
+```
+
+Output is a tab-separated file with one row per SNP and one column per output
+variable (`x`, `y`, and each covariate), containing mean absolute SHAP values
+across all attributed samples.
+
+Use `--background-size` (default 100) to control how many training samples are
+used as the SHAP background — larger values are more stable but slower. Use
+`--min-maf` to exclude low-frequency SNPs from the output. Add `--save-raw` to
+also write per-sample SHAP values to `<out-stem>_raw.tsv` alongside the summary.
 
 ----
 
