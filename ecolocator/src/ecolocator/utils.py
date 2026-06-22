@@ -111,8 +111,7 @@ def sort_samples(
 
 
 def replace_missing_data(
-    genotypes: allel.GenotypeArray,
-    rng: np.random.Generator = None
+    genotypes: allel.GenotypeArray, rng: np.random.Generator = None
 ) -> np.ndarray:
     logging.info("imputing missing data")
     dc = genotypes.count_alleles()[:, 1]
@@ -124,17 +123,17 @@ def replace_missing_data(
         for j in range(np.shape(ac)[1]):
             if missingness[i, j]:
                 if rng is not None:
-                    ac[i, j] = rng.binomial(2, af[i]) 
+                    ac[i, j] = rng.binomial(2, af[i])
                 else:
                     ac[i, j] = np.random.binomial(2, af[i])
     return ac
 
 
 def filter_snps(
-        genotypes: allel.GenotypeArray,
-        min_mac: int = 2,
-        max_snps: int = None,
-        rng: np.random.Generator = None 
+    genotypes: allel.GenotypeArray,
+    min_mac: int = 2,
+    max_snps: int = None,
+    rng: np.random.Generator = None,
 ) -> tuple:
     logging.info("filtering SNPs...")
     kept_indices = np.arange(genotypes.shape[0])
@@ -142,7 +141,7 @@ def filter_snps(
     biallelic_mask = allele_counts.is_biallelic()
     genotypes = genotypes[biallelic_mask, :, :]
     kept_indices = kept_indices[biallelic_mask]
-    if min_mac !=1:
+    if min_mac != 1:
         derived_counts = genotypes.count_alleles()[:, 1]
         mac_mask = derived_counts >= min_mac
         genotypes = genotypes[mac_mask, :, :]
@@ -158,27 +157,28 @@ def filter_snps(
 
 
 def normalize_locs(
-        locs: np.array,
-        transforms: list = None,
-        cov_names: list = None,
+    locs: np.array,
+    transforms: list = None,
+    cov_names: list = None,
 ) -> tuple:
     num_covs = locs.shape[1] - 2
     if transforms is None:
-        transforms = ['none'] * num_covs
+        transforms = ["none"] * num_covs
     if cov_names is None:
-        cov_names = [f"cov{i+1}" for i in range(num_covs)]
+        cov_names = [f"cov{i + 1}" for i in range(num_covs)]
     if len(transforms) != num_covs:
         raise ValueError(
             f"transforms length({len(transforms)}) must be equal number of "
             f"covariates ({num_covs})"
         )
-    valid = {'none', 'log'}
+    valid = {"none", "log"}
     unknown = [t for t in transforms if t not in valid]
     if unknown:
-        raise ValueError(f"Unknown transform(s): {unknown}. Valid options: {sorted(valid)}."
+        raise ValueError(
+            f"Unknown transform(s): {unknown}. Valid options: {sorted(valid)}."
         )
     for i, t in enumerate(transforms):
-        if t == 'log':
+        if t == "log":
             col = locs[:, 2 + i]
             nonnan = col[~np.isnan(col)]
             if np.any(nonnan <= 0):
@@ -187,22 +187,22 @@ def normalize_locs(
                     f"(min={nonnan.min():.4f}); log transform requires all values > 0."
                 )
     meanlong = np.nanmean(locs[:, 0])
-    sdlong   = np.nanstd(locs[:, 0])
-    meanlat  = np.nanmean(locs[:, 1])
-    sdlat    = np.nanstd(locs[:, 1])
+    sdlong = np.nanstd(locs[:, 0])
+    meanlat = np.nanmean(locs[:, 1])
+    sdlat = np.nanstd(locs[:, 1])
 
     cov_data = locs[:, 2:].copy().astype(float)
     for i, t in enumerate(transforms):
-        if t == 'log':
+        if t == "log":
             cov_data[:, i] = np.log(cov_data[:, i])
 
     means = np.nanmean(cov_data, axis=0)
-    sds   = np.nanstd(cov_data, axis=0)
+    sds = np.nanstd(cov_data, axis=0)
 
     for i, t in enumerate(transforms):
-        if t == 'none':
+        if t == "none":
             raw_col = locs[:, 2 + i]
-            nonnan  = raw_col[~np.isnan(raw_col)]
+            nonnan = raw_col[~np.isnan(raw_col)]
             if np.all(nonnan > 0):
                 gap = nonnan.min() / sds[i]
                 skewness = stats.skew(nonnan)
@@ -214,9 +214,9 @@ def normalize_locs(
                         f"Consider using 'log' for this covariate."
                     )
 
-    x_norm    = (locs[:, 0] - meanlong) / sdlong
-    y_norm    = (locs[:, 1] - meanlat) / sdlat
-    cov_norm  = (cov_data - means) / sds
+    x_norm = (locs[:, 0] - meanlong) / sdlong
+    y_norm = (locs[:, 1] - meanlat) / sdlat
+    cov_norm = (cov_data - means) / sds
     norm_locs = np.column_stack([x_norm, y_norm, cov_norm])
 
     return meanlong, sdlong, meanlat, sdlat, means, sds, transforms, norm_locs
@@ -230,6 +230,6 @@ def back_transform_env(
 ) -> np.ndarray:
     result = z_array * sds + means
     for i, t in enumerate(transforms):
-        if t == 'log':
+        if t == "log":
             result[:, i] = np.exp(result[:, i])
     return result
