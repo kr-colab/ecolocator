@@ -52,7 +52,11 @@ def example_data(tmp_path_factory):
     return (vcf_path, zarr_path, matrix_path, sample_data_path)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+
+>>>>>>> d904881 ( ran ruff formatting)
 @pytest.fixture(scope="session")
 def no_covariate_data(tmp_path_factory):
     num_individuals = 5

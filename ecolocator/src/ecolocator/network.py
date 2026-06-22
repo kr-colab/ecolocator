@@ -27,7 +27,9 @@ def build_network(
         trunk = tf.keras.layers.Dense(width, activation="elu")(trunk)
     loc_output = tf.keras.layers.Dense(2)(tf.keras.layers.Dense(2)(trunk))
     if num_covs > 0:
-        env_output = tf.keras.layers.Dense(num_covs)(tf.keras.layers.Dense(num_covs)(trunk))
+        env_output = tf.keras.layers.Dense(num_covs)(
+            tf.keras.layers.Dense(num_covs)(trunk)
+        )
         model = tf.keras.Model(inputs=geno_input, outputs=[loc_output, env_output])
         losses = [euclid_loss, "mse"]
         loss_weights = [loc_weight, env_weight]
