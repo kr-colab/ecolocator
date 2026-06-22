@@ -62,7 +62,7 @@ class EcoLocator:
 
         obj.cov_names_ = params["cov_names"]
         obj.seed_ = params["seed"]
-        obj.num_covs_ = params["num_covs"]
+        obj.num_covs_ = len(obj.cov_names_)
         obj.transforms_ = params["transforms"]
 
         obj.model_ = tf.keras.models.load_model(
@@ -121,6 +121,10 @@ class EcoLocator:
         num_covs = locs.shape[1] - 2
         cov_names = [c for c in sample_data.columns if c not in {"sampleID2", "x", "y"}]
         self.cov_names_ = cov_names
+        if num_covs < 1:
+            logging.warning(
+                f"Found {num_covs} covariates in sample data. Proceeding with location data only."
+            )
 
         (
             self.meanlong_,
@@ -142,10 +146,22 @@ class EcoLocator:
         test = rng.choice(train, round((1 - train_split) * len(train)), replace=False)
         train = np.array([x for x in train if x not in test])
 
+<<<<<<< HEAD
         traingen = np.transpose(ac[:, train])
         testgen = np.transpose(ac[:, test])
         trainlocs = [locs[train][:, 0:2], locs[train][:, 2:]]
         testlocs = [locs[test][:, 0:2], locs[test][:, 2:]]
+=======
+        traingen  = np.transpose(ac[:, train])
+        testgen   = np.transpose(ac[:, test])
+
+        if num_covs > 0:
+            trainlocs = [locs[train][:, 0:2], locs[train][:, 2:]]
+            testlocs  = [locs[test][:, 0:2],  locs[test][:, 2:]]
+        else:
+            trainlocs = locs[train][:, 0:2]
+            testlocs  = locs[test][:, 0:2]
+>>>>>>> 7bc048d (updates too allow location only inputs)
 
         self.num_covs_ = num_covs
         self.seed_ = seed
@@ -186,7 +202,16 @@ class EcoLocator:
         predgen = np.transpose(ac[:, pred])
 
         prediction = self.model_.predict(predgen)
+        if self.num_covs_ > 0:
+            pred_longlat = (
+                prediction[0] * np.array([self.sdlong_, self.sdlat_])
+                + np.array([self.meanlong_, self.meanlat_])
+            )
+            pred_env = back_transform_env(
+                prediction[1], self.means_, self.sds_, self.transforms_
+            )
 
+<<<<<<< HEAD
         pred_longlat = prediction[0] * np.array([self.sdlong_, self.sdlat_]) + np.array(
             [self.meanlong_, self.meanlat_]
         )
@@ -199,6 +224,22 @@ class EcoLocator:
         result = pd.concat([result, cov_cols], axis=1)
         result.insert(0, "sampleID", samples[pred])
         return result
+=======
+            result = pd.DataFrame(pred_longlat, columns=["x", "y"])
+            cov_cols = pd.DataFrame(pred_env, columns=self.cov_names_)
+            result = pd.concat([result, cov_cols], axis=1)
+            result.insert(0, "sampleID", samples[pred])
+            return result
+        else:
+            pred_longlat = (
+                prediction * np.array([self.sdlong_, self.sdlat_])
+                + np.array([self.meanlong_, self.meanlat_])
+            )
+            
+            result = pd.DataFrame(pred_longlat, columns=["x", "y"])
+            result.insert(0, "sampleID", samples[pred])
+            return result
+>>>>>>> 7bc048d (updates too allow location only inputs)
 
     def fit_predict_loo(
         self,
@@ -238,10 +279,17 @@ class EcoLocator:
             loo_locs = locs.copy()
             loo_locs[i] = np.nan
 
+<<<<<<< HEAD
             (meanlong, sdlong, meanlat, sdlat, means, sds, transforms, norm_locs) = (
                 normalize_locs(
                     loo_locs, transforms=self.cov_transforms, cov_names=cov_names
                 )
+=======
+            
+            (meanlong, sdlong, meanlat, sdlat,
+            means, sds, transforms, norm_locs) = normalize_locs(
+                loo_locs, transforms=self.cov_transforms, cov_names=cov_names
+>>>>>>> 7bc048d (updates too allow location only inputs)
             )
 
             train = np.argwhere(~np.isnan(norm_locs[:, 0])).flatten()
@@ -250,11 +298,25 @@ class EcoLocator:
             )
             train = np.array([x for x in train if x not in test])
 
+<<<<<<< HEAD
             traingen = np.transpose(ac[:, train])
             testgen = np.transpose(ac[:, test])
             trainlocs = [norm_locs[train][:, 0:2], norm_locs[train][:, 2:]]
             testlocs = [norm_locs[test][:, 0:2], norm_locs[test][:, 2:]]
             predgen = np.transpose(ac[:, [i]])
+=======
+            traingen  = np.transpose(ac[:, train])
+            testgen   = np.transpose(ac[:, test])
+
+            if num_covs > 0:
+                trainlocs = [norm_locs[train][:, 0:2], norm_locs[train][:, 2:]]
+                testlocs  = [norm_locs[test][:, 0:2],  norm_locs[test][:, 2:]]
+            else:
+                trainlocs = norm_locs[train][:, 0:2]
+                testlocs  = norm_locs[test][:, 0:2]
+
+            predgen   = np.transpose(ac[:, [i]])
+>>>>>>> 7bc048d (updates too allow location only inputs)
 
             model = build_network(
                 n_snps=traingen.shape[1],
@@ -277,6 +339,7 @@ class EcoLocator:
                 verbose=verbose,
             )
 
+<<<<<<< HEAD
             prediction = model.predict(predgen)
             pred_longlat = prediction[0] * np.array([sdlong, sdlat]) + np.array(
                 [meanlong, meanlat]
@@ -292,6 +355,30 @@ class EcoLocator:
                 row[name] = pred_env[0, j]
             all_predictions.append(row)
             del model
+=======
+            prediction  = model.predict(predgen)
+            if num_covs > 0:
+                pred_longlat = (
+                    prediction[0] * np.array([sdlong, sdlat])
+                    + np.array([meanlong, meanlat])
+                )
+                pred_env = back_transform_env(prediction[1], means, sds, transforms)
+
+                row = {"sampleID": samples[i], "x": pred_longlat[0, 0], "y": pred_longlat[0, 1]}
+                for j, name in enumerate(cov_names):
+                    row[name] = pred_env[0, j]
+                all_predictions.append(row)
+            else:
+                pred_longlat = (
+                    prediction * np.array([sdlong, sdlat])
+                    + np.array([meanlong, meanlat])
+                )
+
+                row = {"sampleID": samples[i], "x": pred_longlat[0, 0], "y": pred_longlat[0, 1]}
+                all_predictions.append(row)
+
+            del model 
+>>>>>>> 7bc048d (updates too allow location only inputs)
             tf.keras.backend.clear_session()
 
         return pd.DataFrame(all_predictions)
@@ -335,6 +422,7 @@ class EcoLocator:
         bg_idx = rng.choice(traingen.shape[0], bg_size, replace=False)
         background = traingen[bg_idx, :]
 
+<<<<<<< HEAD
         # wrap model heads
         model_loc = tf.keras.Model(
             inputs=self.model_.input, outputs=self.model_.output[0]
@@ -342,13 +430,24 @@ class EcoLocator:
         model_env = tf.keras.Model(
             inputs=self.model_.input, outputs=self.model_.output[1]
         )
+=======
+        #wrap model heads
+        if self.num_covs_ > 0:
+            model_loc = tf.keras.Model(inputs=self.model_.input, outputs=self.model_.output[0])
+        else:
+            model_loc = self.model_
+>>>>>>> 7bc048d (updates too allow location only inputs)
 
         # compute shap
         expl_loc = shap.GradientExplainer(model_loc, background)
-        expl_env = shap.GradientExplainer(model_env, background)
         shap_loc = expl_loc.shap_values(predgen)
-        shap_env = expl_env.shap_values(predgen)
 
+        if self.num_covs_ > 0:
+            model_env = tf.keras.Model(inputs=self.model_.input, outputs=self.model_.output[1])
+            expl_env = shap.GradientExplainer(model_env, background)
+            shap_env = expl_env.shap_values(predgen)
+        
+        
         snp_ids = self._kept_snp_indices_
 
         # apply min_maf filter to snp index list before building either format
@@ -358,7 +457,8 @@ class EcoLocator:
             mask = maf >= min_maf
             snp_ids = snp_ids[mask]
             shap_loc = shap_loc[:, mask, :]
-            shap_env = shap_env[:, mask, :]
+            if self.num_covs_ > 0:
+                shap_env = shap_env[:, mask, :]
 
         n_samples = predgen.shape[0]
         if n_samples == 1:
