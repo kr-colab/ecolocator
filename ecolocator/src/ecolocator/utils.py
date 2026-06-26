@@ -162,6 +162,13 @@ def normalize_locs(
     cov_names: list = None,
 ) -> tuple:
     num_covs = locs.shape[1] - 2
+    if num_covs < 0:
+        raise ValueError(
+            f"locs must have at least 2 columns (x and y). Found {num_covs + 2}."
+        )
+    if num_covs < 1:
+        logging.info("No covariates found in locs. Proceeding with location data only.")
+
     if transforms is None:
         transforms = ["none"] * num_covs
     if cov_names is None:
