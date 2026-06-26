@@ -146,31 +146,15 @@ class EcoLocator:
         test = rng.choice(train, round((1 - train_split) * len(train)), replace=False)
         train = np.array([x for x in train if x not in test])
 
-<<<<<<< HEAD
-<<<<<<< HEAD
         traingen = np.transpose(ac[:, train])
         testgen = np.transpose(ac[:, test])
-        trainlocs = [locs[train][:, 0:2], locs[train][:, 2:]]
-        testlocs = [locs[test][:, 0:2], locs[test][:, 2:]]
-=======
-        traingen  = np.transpose(ac[:, train])
-        testgen   = np.transpose(ac[:, test])
-=======
-        traingen = np.transpose(ac[:, train])
-        testgen = np.transpose(ac[:, test])
->>>>>>> d904881 ( ran ruff formatting)
 
         if num_covs > 0:
             trainlocs = [locs[train][:, 0:2], locs[train][:, 2:]]
             testlocs = [locs[test][:, 0:2], locs[test][:, 2:]]
         else:
             trainlocs = locs[train][:, 0:2]
-<<<<<<< HEAD
-            testlocs  = locs[test][:, 0:2]
->>>>>>> 7bc048d (updates too allow location only inputs)
-=======
             testlocs = locs[test][:, 0:2]
->>>>>>> d904881 ( ran ruff formatting)
 
         self.num_covs_ = num_covs
         self.seed_ = seed
@@ -219,20 +203,6 @@ class EcoLocator:
                 prediction[1], self.means_, self.sds_, self.transforms_
             )
 
-<<<<<<< HEAD
-        pred_longlat = prediction[0] * np.array([self.sdlong_, self.sdlat_]) + np.array(
-            [self.meanlong_, self.meanlat_]
-        )
-        pred_env = back_transform_env(
-            prediction[1], self.means_, self.sds_, self.transforms_
-        )
-
-        result = pd.DataFrame(pred_longlat, columns=["x", "y"])
-        cov_cols = pd.DataFrame(pred_env, columns=self.cov_names_)
-        result = pd.concat([result, cov_cols], axis=1)
-        result.insert(0, "sampleID", samples[pred])
-        return result
-=======
             result = pd.DataFrame(pred_longlat, columns=["x", "y"])
             cov_cols = pd.DataFrame(pred_env, columns=self.cov_names_)
             result = pd.concat([result, cov_cols], axis=1)
@@ -246,7 +216,6 @@ class EcoLocator:
             result = pd.DataFrame(pred_longlat, columns=["x", "y"])
             result.insert(0, "sampleID", samples[pred])
             return result
->>>>>>> 7bc048d (updates too allow location only inputs)
 
     def fit_predict_loo(
         self,
@@ -286,23 +255,10 @@ class EcoLocator:
             loo_locs = locs.copy()
             loo_locs[i] = np.nan
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> d904881 ( ran ruff formatting)
             (meanlong, sdlong, meanlat, sdlat, means, sds, transforms, norm_locs) = (
                 normalize_locs(
                     loo_locs, transforms=self.cov_transforms, cov_names=cov_names
                 )
-<<<<<<< HEAD
-=======
-            
-            (meanlong, sdlong, meanlat, sdlat,
-            means, sds, transforms, norm_locs) = normalize_locs(
-                loo_locs, transforms=self.cov_transforms, cov_names=cov_names
->>>>>>> 7bc048d (updates too allow location only inputs)
-=======
->>>>>>> d904881 ( ran ruff formatting)
             )
 
             train = np.argwhere(~np.isnan(norm_locs[:, 0])).flatten()
@@ -311,20 +267,8 @@ class EcoLocator:
             )
             train = np.array([x for x in train if x not in test])
 
-<<<<<<< HEAD
-<<<<<<< HEAD
             traingen = np.transpose(ac[:, train])
             testgen = np.transpose(ac[:, test])
-            trainlocs = [norm_locs[train][:, 0:2], norm_locs[train][:, 2:]]
-            testlocs = [norm_locs[test][:, 0:2], norm_locs[test][:, 2:]]
-            predgen = np.transpose(ac[:, [i]])
-=======
-            traingen  = np.transpose(ac[:, train])
-            testgen   = np.transpose(ac[:, test])
-=======
-            traingen = np.transpose(ac[:, train])
-            testgen = np.transpose(ac[:, test])
->>>>>>> d904881 ( ran ruff formatting)
 
             if num_covs > 0:
                 trainlocs = [norm_locs[train][:, 0:2], norm_locs[train][:, 2:]]
@@ -333,12 +277,7 @@ class EcoLocator:
                 trainlocs = norm_locs[train][:, 0:2]
                 testlocs = norm_locs[test][:, 0:2]
 
-<<<<<<< HEAD
-            predgen   = np.transpose(ac[:, [i]])
->>>>>>> 7bc048d (updates too allow location only inputs)
-=======
             predgen = np.transpose(ac[:, [i]])
->>>>>>> d904881 ( ran ruff formatting)
 
             model = build_network(
                 n_snps=traingen.shape[1],
@@ -361,28 +300,7 @@ class EcoLocator:
                 verbose=verbose,
             )
 
-<<<<<<< HEAD
-<<<<<<< HEAD
             prediction = model.predict(predgen)
-            pred_longlat = prediction[0] * np.array([sdlong, sdlat]) + np.array(
-                [meanlong, meanlat]
-            )
-            pred_env = back_transform_env(prediction[1], means, sds, transforms)
-
-            row = {
-                "sampleID": samples[i],
-                "x": pred_longlat[0, 0],
-                "y": pred_longlat[0, 1],
-            }
-            for j, name in enumerate(cov_names):
-                row[name] = pred_env[0, j]
-            all_predictions.append(row)
-            del model
-=======
-            prediction  = model.predict(predgen)
-=======
-            prediction = model.predict(predgen)
->>>>>>> d904881 ( ran ruff formatting)
             if num_covs > 0:
                 pred_longlat = prediction[0] * np.array([sdlong, sdlat]) + np.array(
                     [meanlong, meanlat]
@@ -409,12 +327,7 @@ class EcoLocator:
                 }
                 all_predictions.append(row)
 
-<<<<<<< HEAD
-            del model 
->>>>>>> 7bc048d (updates too allow location only inputs)
-=======
             del model
->>>>>>> d904881 ( ran ruff formatting)
             tf.keras.backend.clear_session()
 
         return pd.DataFrame(all_predictions)
@@ -458,27 +371,13 @@ class EcoLocator:
         bg_idx = rng.choice(traingen.shape[0], bg_size, replace=False)
         background = traingen[bg_idx, :]
 
-<<<<<<< HEAD
-<<<<<<< HEAD
         # wrap model heads
-        model_loc = tf.keras.Model(
-            inputs=self.model_.input, outputs=self.model_.output[0]
-        )
-        model_env = tf.keras.Model(
-            inputs=self.model_.input, outputs=self.model_.output[1]
-        )
-=======
-        #wrap model heads
-=======
-        # wrap model heads
->>>>>>> d904881 ( ran ruff formatting)
         if self.num_covs_ > 0:
             model_loc = tf.keras.Model(
                 inputs=self.model_.input, outputs=self.model_.output[0]
             )
         else:
             model_loc = self.model_
->>>>>>> 7bc048d (updates too allow location only inputs)
 
         # compute shap
         expl_loc = shap.GradientExplainer(model_loc, background)

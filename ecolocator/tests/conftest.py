@@ -51,12 +51,7 @@ def example_data(tmp_path_factory):
 
     return (vcf_path, zarr_path, matrix_path, sample_data_path)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
 
->>>>>>> d904881 ( ran ruff formatting)
 @pytest.fixture(scope="session")
 def no_covariate_data(tmp_path_factory):
     num_individuals = 5
@@ -91,7 +86,6 @@ def no_covariate_data(tmp_path_factory):
     sample_data_df.to_csv(sample_data_path, sep="\t", index=True)
     return (matrix_path, sample_data_path)
 
->>>>>>> 7bc048d (updates too allow location only inputs)
 
 @pytest.fixture
 def sample_locs():
