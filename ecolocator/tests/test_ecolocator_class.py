@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 from ecolocator import EcoLocator
 
+
 def test_fit_returns_self(example_data):
     """testing that fit() returns the EcoLocator instance for method chaining"""
     _, _, matrix_path, sample_data_path = example_data
@@ -15,6 +16,7 @@ def test_fit_returns_self(example_data):
         train_split=0.6,
     )
     assert result is model
+
 
 def test_fit_sets_attributes(example_data):
     """testing that fit() sets expected attributes on the EcoLocator instance"""
@@ -37,6 +39,7 @@ def test_fit_sets_attributes(example_data):
     assert hasattr(model, "seed_")
     assert model.num_covs_ == 3
     assert model.cov_names_ == ["cov1", "cov2", "cov3"]
+
 
 def test_predict_returns_dataframe(example_data, tmp_path):
     """testing that predict() returns a DataFrame with correct columns"""
@@ -63,10 +66,11 @@ def test_predict_returns_dataframe(example_data, tmp_path):
     assert list(result.columns) == ["sampleID", "x", "y", "cov1", "cov2", "cov3"]
     assert len(result) == 1
 
+
 def test_predict_positive_with_log_transform(example_data, tmp_path):
     """predict() with log transform always returns positive covariate values"""
     _, _, matrix_path, sample_data_path = example_data
-    model = EcoLocator(nlayers=2, width=32, cov_transforms=['none', 'none', 'log'])
+    model = EcoLocator(nlayers=2, width=32, cov_transforms=["none", "none", "log"])
     model.fit(
         str(matrix_path),
         str(sample_data_path),
@@ -84,6 +88,7 @@ def test_predict_positive_with_log_transform(example_data, tmp_path):
     result = model.predict(str(matrix_path), str(masked_path))
 
     assert result["cov3"].iloc[0] > 0
+
 
 def test_fit_predict_loo_returns_all_samples(example_data):
     """fit_predict_loo() returns one prediction row per known sample"""
@@ -104,6 +109,7 @@ def test_fit_predict_loo_returns_all_samples(example_data):
     assert len(result) == len(sample_data)
     assert "sampleID" in result.columns
 
+
 def test_fit_predict_loo_max_folds(example_data):
     """fit_predict_loo() with max_folds returns exactly that many prediction rows"""
     _, _, matrix_path, sample_data_path = example_data
@@ -119,6 +125,7 @@ def test_fit_predict_loo_max_folds(example_data):
     )
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 2
+
 
 def test_save_load_roundtrip(tmp_path, example_data):
     """save() and load() round-trip restores all attributes and hyperparameters"""
@@ -136,13 +143,14 @@ def test_save_load_roundtrip(tmp_path, example_data):
     save_dir = str(tmp_path / "saved_model")
     model.save(save_dir)
     loaded = EcoLocator.load(save_dir)
-    
+
     assert loaded.nlayers == model.nlayers
     assert loaded.cov_names_ == model.cov_names_
     assert np.isclose(loaded.meanlong_, model.meanlong_)
     assert np.isclose(loaded.meanlat_, model.meanlat_)
     np.testing.assert_array_equal(loaded._kept_snp_indices_, model._kept_snp_indices_)
     assert loaded.seed_ == model.seed_
+
 
 def test_load_predict_matches(tmp_path, example_data):
     """a model loaded from disk produces a valid prediction DataFrame"""
@@ -160,7 +168,7 @@ def test_load_predict_matches(tmp_path, example_data):
     save_dir = str(tmp_path / "saved_model")
     model.save(save_dir)
     loaded = EcoLocator.load(save_dir)
-    
+
     sample_data = pd.read_csv(sample_data_path, sep="\t")
     sample_data.iloc[0, 1:] = np.nan
     masked_path = tmp_path / "masked.tsv"
@@ -170,6 +178,7 @@ def test_load_predict_matches(tmp_path, example_data):
 
     assert isinstance(result, pd.DataFrame)
     assert list(result.columns) == ["sampleID", "x", "y", "cov1", "cov2", "cov3"]
+
 
 def test_shap_values_not_fitted_raises(example_data):
     """testing that shap_values() raises RuntimeError if called before fit()"""
@@ -215,6 +224,7 @@ def test_shap_values_returns_dataframe(example_data, tmp_path):
     assert len(result) == n_snps
     assert list(result.columns) == expected_cols
     assert set(result["snp_id"]) == set(model._kept_snp_indices_)
+
 
 def test_shap_values_min_maf_filters_columns(example_data, tmp_path):
     """testing that shap_values() with min_maf filters out low-frequency SNPs"""

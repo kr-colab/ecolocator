@@ -14,7 +14,7 @@ def test_ecolocator_init_defaults():
 
 def test_ecolocator_init_custom():
     """EcoLocator stores custom hyperparameters correctly"""
-    model = EcoLocator(nlayers=5, width=128, cov_transforms=['none', 'log'])
+    model = EcoLocator(nlayers=5, width=128, cov_transforms=["none", "log"])
     assert model.nlayers == 5
     assert model.width == 128
-    assert model.cov_transforms == ['none', 'log']
+    assert model.cov_transforms == ["none", "log"]

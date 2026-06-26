@@ -43,24 +43,38 @@ def train(
     width: int = typer.Option(256, help="Units per hidden layer."),
     dropout_prop: float = typer.Option(0.25, help="Dropout proportion."),
     loc_weight: float = typer.Option(1.0, help="Loss weight on the location head."),
-    env_weight: float = typer.Option(1.0, help="Loss weight on the environmental-covariate head."),
+    env_weight: float = typer.Option(
+        1.0, help="Loss weight on the environmental-covariate head."
+    ),
     cov_transforms: Optional[str] = typer.Option(
         None,
         help="Comma-separated per-covariate transforms (e.g. 'none,log,log'). Valid: none, log.",
     ),
     max_epochs: int = typer.Option(5000, help="Maximum training epochs."),
-    patience: int = typer.Option(100, help="Early-stopping patience (epochs without val improvement)."),
+    patience: int = typer.Option(
+        100, help="Early-stopping patience (epochs without val improvement)."
+    ),
     batch_size: int = typer.Option(32, help="Minibatch size."),
     min_mac: int = typer.Option(2, help="Minimum minor-allele count to retain a site."),
-    max_snps: Optional[int] = typer.Option(None, help="Randomly subsample to this many SNPs (default: keep all)."),
-    train_split: float = typer.Option(0.9, help="Fraction of known-location samples used for training."),
-    seed: Optional[int] = typer.Option(None, help="RNG seed for splits and SNP subsetting."),
-    verbose: int = typer.Option(1, help="Keras verbosity (0=silent, 1=batches, 2=epochs)."),
+    max_snps: Optional[int] = typer.Option(
+        None, help="Randomly subsample to this many SNPs (default: keep all)."
+    ),
+    train_split: float = typer.Option(
+        0.9, help="Fraction of known-location samples used for training."
+    ),
+    seed: Optional[int] = typer.Option(
+        None, help="RNG seed for splits and SNP subsetting."
+    ),
+    verbose: int = typer.Option(
+        1, help="Keras verbosity (0=silent, 1=batches, 2=epochs)."
+    ),
 ) -> None:
     """Train an EcoLocator model and save it to OUT."""
     from .ecolocator_class import EcoLocator
 
-    transforms = [t.strip() for t in cov_transforms.split(",")] if cov_transforms else None
+    transforms = (
+        [t.strip() for t in cov_transforms.split(",")] if cov_transforms else None
+    )
 
     model = EcoLocator(
         cov_transforms=transforms,
@@ -93,7 +107,7 @@ def predict(
         "--model",
         "-m",
         exists=True,
-        file_okay=False, 
+        file_okay=False,
         help="Directory containing a saved EcoLocator model (from `ecolocator train`).",
     ),
     genotypes: Path = typer.Option(
@@ -165,24 +179,38 @@ def loo(
     width: int = typer.Option(256, help="Units per hidden layer."),
     dropout_prop: float = typer.Option(0.25, help="Dropout proportion."),
     loc_weight: float = typer.Option(1.0, help="Loss weight on the location head."),
-    env_weight: float = typer.Option(1.0, help="Loss weight on the environmental-covariate head."),
+    env_weight: float = typer.Option(
+        1.0, help="Loss weight on the environmental-covariate head."
+    ),
     cov_transforms: Optional[str] = typer.Option(
         None,
         help="Comma-separated per-covariate transforms (e.g. 'none,log,log'). Valid: none, log.",
     ),
     max_epochs: int = typer.Option(5000, help="Maximum training epochs."),
-    patience: int = typer.Option(100, help="Early-stopping patience (epochs without val improvement)."),
+    patience: int = typer.Option(
+        100, help="Early-stopping patience (epochs without val improvement)."
+    ),
     batch_size: int = typer.Option(32, help="Minibatch size."),
     min_mac: int = typer.Option(2, help="Minimum minor-allele count to retain a site."),
-    max_snps: Optional[int] = typer.Option(None, help="Randomly subsample to this many SNPs (default: keep all)."),
-    train_split: float = typer.Option(0.9, help="Fraction of known-location samples used for training."),
-    seed: Optional[int] = typer.Option(None, help="RNG seed for splits and SNP subsetting."),
-    verbose: int = typer.Option(0, help="Keras verbosity (0=silent, 1=batches, 2=epochs)."),
+    max_snps: Optional[int] = typer.Option(
+        None, help="Randomly subsample to this many SNPs (default: keep all)."
+    ),
+    train_split: float = typer.Option(
+        0.9, help="Fraction of known-location samples used for training."
+    ),
+    seed: Optional[int] = typer.Option(
+        None, help="RNG seed for splits and SNP subsetting."
+    ),
+    verbose: int = typer.Option(
+        0, help="Keras verbosity (0=silent, 1=batches, 2=epochs)."
+    ),
 ) -> None:
     """Leave-one-out fit-and-predict over all samples with known coordinates."""
     from .ecolocator_class import EcoLocator
 
-    transforms = [t.strip() for t in cov_transforms.split(",")] if cov_transforms else None
+    transforms = (
+        [t.strip() for t in cov_transforms.split(",")] if cov_transforms else None
+    )
 
     el = EcoLocator(
         cov_transforms=transforms,

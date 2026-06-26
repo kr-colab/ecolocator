@@ -3,7 +3,14 @@ import numpy as np
 import allel
 import pandas as pd
 import logging
-from ecolocator.utils import load_genotypes, sort_samples, replace_missing_data, filter_snps, normalize_locs, back_transform_env
+from ecolocator.utils import (
+    load_genotypes,
+    sort_samples,
+    replace_missing_data,
+    filter_snps,
+    normalize_locs,
+    back_transform_env,
+)
 
 
 def test_load_genos_noinput():
@@ -167,65 +174,75 @@ def test_filter_snps_returns_correct_types(example_data):
     assert isinstance(filtered, allel.GenotypeArray)
     assert isinstance(kept_indices, np.ndarray)
 
+
 def test_filter_snps_biallelic_only():
     """testing filter_snps removes monomorphic SNPs, keeping only biallelic ones"""
-    gt = allel.GenotypeArray([
-        [[0, 0], [0, 1], [0, 0], [1, 1]],  # biallelic - kept
-        [[0, 0], [0, 0], [0, 0], [0, 0]],  # monomorphic - removed
-        [[0, 1], [1, 1], [0, 0], [0, 1]],  # biallelic - kept
-    ])
+    gt = allel.GenotypeArray(
+        [
+            [[0, 0], [0, 1], [0, 0], [1, 1]],  # biallelic - kept
+            [[0, 0], [0, 0], [0, 0], [0, 0]],  # monomorphic - removed
+            [[0, 1], [1, 1], [0, 0], [0, 1]],  # biallelic - kept
+        ]
+    )
     filtered, kept_indices = filter_snps(gt, min_mac=1)
     assert len(filtered) == 2
     np.testing.assert_array_equal(kept_indices, [0, 2])
 
+
 def test_filter_snps_mac_filter():
     """testing filter_snps removes SNPs whose alt allele count falls below min_mac"""
-    gt = allel.GenotypeArray([
-        [[0, 0], [0, 1], [0, 0], [0, 0]],  # mac=1 - removed with min_mac=2
-        [[0, 1], [0, 0], [0, 0], [0, 1]],  # mac=2 - kept
-        [[1, 1], [0, 1], [0, 1], [0, 0]],  # mac=4 - kept
-    ])
+    gt = allel.GenotypeArray(
+        [
+            [[0, 0], [0, 1], [0, 0], [0, 0]],  # mac=1 - removed with min_mac=2
+            [[0, 1], [0, 0], [0, 0], [0, 1]],  # mac=2 - kept
+            [[1, 1], [0, 1], [0, 1], [0, 0]],  # mac=4 - kept
+        ]
+    )
     filtered, kept_indices = filter_snps(gt, min_mac=2)
     assert len(filtered) == 2
     np.testing.assert_array_equal(kept_indices, [1, 2])
 
+
 def test_filter_snps_min_mac_1_skips_mac_filter():
     """testing filter_snps with min_mac=1 skips MAC filtering, keeping all biallelic SNPs"""
-    gt = allel.GenotypeArray([
-        [[0, 0], [0, 1], [0, 0], [0, 0]],  # mac=1
-        [[0, 1], [0, 0], [0, 0], [0, 1]],  # mac=2
-    ])
+    gt = allel.GenotypeArray(
+        [
+            [[0, 0], [0, 1], [0, 0], [0, 0]],  # mac=1
+            [[0, 1], [0, 0], [0, 0], [0, 1]],  # mac=2
+        ]
+    )
     filtered_mac1, _ = filter_snps(gt, min_mac=1)
     filtered_mac2, _ = filter_snps(gt, min_mac=2)
     assert len(filtered_mac1) == 2
     assert len(filtered_mac2) == 1
 
+
 def test_filter_snps_max_snps():
     """testing filter_snps with max_snps returns exactly that many SNPs"""
-    gt = allel.GenotypeArray([
-        [[0, 1], [0, 1], [0, 0], [0, 0]] for _ in range(10)
-    ])
+    gt = allel.GenotypeArray([[[0, 1], [0, 1], [0, 0], [0, 0]] for _ in range(10)])
     filtered, kept_indices = filter_snps(gt, max_snps=3, rng=np.random.default_rng(42))
     assert len(filtered) == 3
     assert len(kept_indices) == 3
 
+
 def test_filter_snps_rng_reproducible():
     """filter_snps with the same seeded rng selects the same SNPs each time"""
-    gt = allel.GenotypeArray([
-        [[0, 1], [0, 1], [0, 0], [0, 0]] for _ in range(10)
-    ])
+    gt = allel.GenotypeArray([[[0, 1], [0, 1], [0, 0], [0, 0]] for _ in range(10)])
     filtered1, indices1 = filter_snps(gt, max_snps=3, rng=np.random.default_rng(42))
     filtered2, indices2 = filter_snps(gt, max_snps=3, rng=np.random.default_rng(42))
     np.testing.assert_array_equal(indices1, indices2)
     np.testing.assert_array_equal(filtered1, filtered2)
 
+
 def test_filter_snps_kept_indices_consistent():
     """testing if kept_indices correctly references the matching rows in the original genotypes array"""
-    gt = allel.GenotypeArray([
-        [[0, 0], [0, 1], [0, 0], [0, 0]],  # mac=1 - removed
-        [[0, 1], [0, 0], [0, 0], [0, 1]],  # mac=2 - kept
-        [[1, 1], [0, 1], [0, 1], [0, 0]],  # mac=4 - kept
-    ])
+    gt = allel.GenotypeArray(
+        [
+            [[0, 0], [0, 1], [0, 0], [0, 0]],  # mac=1 - removed
+            [[0, 1], [0, 0], [0, 0], [0, 1]],  # mac=2 - kept
+            [[1, 1], [0, 1], [0, 1], [0, 0]],  # mac=4 - kept
+        ]
+    )
     filtered, kept_indices = filter_snps(gt, min_mac=2)
     np.testing.assert_array_equal(filtered, gt[kept_indices])
 
@@ -236,161 +253,189 @@ def test_normalize_locs_zscore_properties(sample_locs):
     np.testing.assert_allclose(np.mean(norm_locs, axis=0), np.zeros(5), atol=1e-10)
     np.testing.assert_allclose(np.std(norm_locs, axis=0), np.ones(5), atol=1e-10)
 
+
 def test_normalize_locs_default_transforms_equivalent(sample_locs):
     """testing normalize_locs with transform=None gives same result as explicit all-none transforms"""
     result_default = normalize_locs(sample_locs)
-    result_explicit = normalize_locs(sample_locs, ['none', 'none', 'none'])
+    result_explicit = normalize_locs(sample_locs, ["none", "none", "none"])
     np.testing.assert_array_equal(result_default[-1], result_explicit[-1])
     assert result_default[6] == result_explicit[6]
 
+
 def test_normalize_locs_roundtrip_none(sample_locs):
     """testing normalize_locs with none transform recovers original values on back-transform"""
-    meanlong, sdlong, meanlat, sdlat, means, sds, _, norm_locs = normalize_locs(sample_locs)
-    recovered = np.column_stack([
-        norm_locs[:, 0] * sdlong + meanlong, 
-        norm_locs[:, 1] * sdlat + meanlat, 
-        norm_locs[:, 2:] * sds + means,
-    ])
+    meanlong, sdlong, meanlat, sdlat, means, sds, _, norm_locs = normalize_locs(
+        sample_locs
+    )
+    recovered = np.column_stack(
+        [
+            norm_locs[:, 0] * sdlong + meanlong,
+            norm_locs[:, 1] * sdlat + meanlat,
+            norm_locs[:, 2:] * sds + means,
+        ]
+    )
     np.testing.assert_allclose(recovered, sample_locs, atol=1e-10)
+
 
 def test_normalize_locs_log_is_invertible(sample_locs):
     """testing normalize_locs with log transform recovers original covariate values on back-transform"""
     meanlong, sdlong, meanlat, sdlat, means, sds, _, norm_locs = normalize_locs(
-        sample_locs, transforms=['none', 'none', 'log']
+        sample_locs, transforms=["none", "none", "log"]
     )
-    recovered_covs = np.column_stack([
-        norm_locs[:, 2] * sds[0] + means[0],          # cov1 — none
-        norm_locs[:, 3] * sds[1] + means[1],          # cov2 — none
-        np.exp(norm_locs[:, 4] * sds[2] + means[2]),  # cov3 — log
-])
+    recovered_covs = np.column_stack(
+        [
+            norm_locs[:, 2] * sds[0] + means[0],  # cov1 — none
+            norm_locs[:, 3] * sds[1] + means[1],  # cov2 — none
+            np.exp(norm_locs[:, 4] * sds[2] + means[2]),  # cov3 — log
+        ]
+    )
     np.testing.assert_allclose(recovered_covs, sample_locs[:, 2:], atol=1e-10)
+
 
 def test_normalize_locs_transforms_length_mismatch():
     """testing normalize_locs raises ValueError when transforms length does not match number of covariates"""
-    locs = np.array([
-        [1.0, 2.0, 10.0, 100.0,  5.0],
-        [2.0, 3.0, 20.0, 200.0, 10.0],
-        [3.0, 4.0, 30.0, 300.0, 15.0],
-    ])
+    locs = np.array(
+        [
+            [1.0, 2.0, 10.0, 100.0, 5.0],
+            [2.0, 3.0, 20.0, 200.0, 10.0],
+            [3.0, 4.0, 30.0, 300.0, 15.0],
+        ]
+    )
     with pytest.raises(ValueError, match="transforms length"):
-        normalize_locs(locs, transforms=['none', 'none'])
+        normalize_locs(locs, transforms=["none", "none"])
+
 
 def test_normalize_locs_unknown_transform(sample_locs):
     """testing normalize_locs raises ValueError when an unrecognized transform name is passed"""
     with pytest.raises(ValueError, match="Unknown transform"):
-        normalize_locs(sample_locs, transforms=['none', 'sqrt', 'none'])
+        normalize_locs(sample_locs, transforms=["none", "sqrt", "none"])
+
 
 def test_normalize_locs_log_nonpositive_raises():
     """testing that normalize_locs raises ValueError when log transform is applied to a covariate with non-positive values"""
-    locs = np.array([
-        [1.0, 2.0, -5.0, 100.0,  5.0],
-        [2.0, 3.0, 20.0, 200.0, 10.0],
-        [3.0, 4.0, 30.0, 300.0, 15.0],
-    ])
+    locs = np.array(
+        [
+            [1.0, 2.0, -5.0, 100.0, 5.0],
+            [2.0, 3.0, 20.0, 200.0, 10.0],
+            [3.0, 4.0, 30.0, 300.0, 15.0],
+        ]
+    )
     with pytest.raises(ValueError, match="non-positive values"):
-        normalize_locs(locs, transforms=['log', 'none', 'none'])
+        normalize_locs(locs, transforms=["log", "none", "none"])
+
 
 def test_normalize_locs_log_zero_raises():
     """testing that normalize_locs raises ValueError when log transform is applied to a covariate containing zero"""
-    locs = np.array([
-        [1.0, 2.0, 0.0, 100.0,  5.0],
-        [2.0, 3.0, 20.0, 200.0, 10.0],
-        [3.0, 4.0, 30.0, 300.0, 15.0],
-    ])
+    locs = np.array(
+        [
+            [1.0, 2.0, 0.0, 100.0, 5.0],
+            [2.0, 3.0, 20.0, 200.0, 10.0],
+            [3.0, 4.0, 30.0, 300.0, 15.0],
+        ]
+    )
     with pytest.raises(ValueError, match="non-positive values"):
-        normalize_locs(locs, transforms=['log', 'none', 'none'])
+        normalize_locs(locs, transforms=["log", "none", "none"])
+
 
 def test_normalize_locs_warns_small_gap(caplog):
     """testing that normalize_locs emits warning when a pos. covariate has a small gap to the zero boundary"""
-    locs = np.array([
-        [1.0, 2.0, 22.0, 100.0,  5.0],
-        [2.0, 3.0, 23.0, 200.0, 10.0],
-        [3.0, 4.0, 24.0, 300.0, 15.0],
-        [4.0, 5.0, 25.0, 400.0, 20.0],
-        [5.0, 6.0, 98.0, 500.0, 25.0],
-    ])
+    locs = np.array(
+        [
+            [1.0, 2.0, 22.0, 100.0, 5.0],
+            [2.0, 3.0, 23.0, 200.0, 10.0],
+            [3.0, 4.0, 24.0, 300.0, 15.0],
+            [4.0, 5.0, 25.0, 400.0, 20.0],
+            [5.0, 6.0, 98.0, 500.0, 25.0],
+        ]
+    )
     with caplog.at_level(logging.WARNING):
-        normalize_locs(locs, transforms=['none', 'none', 'none'])
+        normalize_locs(locs, transforms=["none", "none", "none"])
     assert any("cov1" in message for message in caplog.messages)
+
 
 def test_normalize_locs_no_warning_with_log(caplog):
     """testing that normalize_locs does not warn when log transform is specified for a skewed positive covariate"""
-    locs = np.array([
-        [1.0, 2.0,  5.0, 1000.0, 500.0],
-        [2.0, 3.0,  6.0, 1100.0, 550.0],
-        [3.0, 4.0,  7.0, 1200.0, 600.0],
-        [4.0, 5.0,  8.0, 1300.0, 650.0],
-        [5.0, 6.0, 98.0, 1400.0, 700.0],
-    ])
+    locs = np.array(
+        [
+            [1.0, 2.0, 5.0, 1000.0, 500.0],
+            [2.0, 3.0, 6.0, 1100.0, 550.0],
+            [3.0, 4.0, 7.0, 1200.0, 600.0],
+            [4.0, 5.0, 8.0, 1300.0, 650.0],
+            [5.0, 6.0, 98.0, 1400.0, 700.0],
+        ]
+    )
     with caplog.at_level(logging.WARNING):
-        normalize_locs(locs, transforms=['log', 'none', 'none'])
+        normalize_locs(locs, transforms=["log", "none", "none"])
     assert len(caplog.messages) == 0
+
 
 def test_normalize_locs_input_not_mutated(sample_locs):
     """testing that normalize_locs does not modify the input locs array"""
     original = sample_locs.copy()
-    normalize_locs(sample_locs, transforms=['none', 'log', 'none'])
+    normalize_locs(sample_locs, transforms=["none", "log", "none"])
     np.testing.assert_array_equal(sample_locs, original)
+
 
 def test_normalize_locs_nan_prediction_samples():
     """testing that normalize_locs handles prediction samples with NaN in all columns"""
-    locs = np.array([
-        [1.0, 2.0, 10.0, 100.0,  5.0],
-        [2.0, 3.0, 20.0, 200.0, 10.0],
-        [3.0, 4.0, 30.0, 300.0, 15.0],
-        [np.nan, np.nan, np.nan, np.nan, np.nan],
-        [np.nan, np.nan, np.nan, np.nan, np.nan],
-    ])
+    locs = np.array(
+        [
+            [1.0, 2.0, 10.0, 100.0, 5.0],
+            [2.0, 3.0, 20.0, 200.0, 10.0],
+            [3.0, 4.0, 30.0, 300.0, 15.0],
+            [np.nan, np.nan, np.nan, np.nan, np.nan],
+            [np.nan, np.nan, np.nan, np.nan, np.nan],
+        ]
+    )
     *_, norm_locs = normalize_locs(locs)
     assert np.all(np.isnan(norm_locs[3:]))
     assert np.all(~np.isnan(norm_locs[:3]))
 
+
 def test_back_transform_env_none_is_linear():
     """testing back_tranform_env with all-none transforms is exactly z * sds + means"""
-    z = np.array([[0.0, 1.0, -1.0],
-                  [1.0, -1.0, 0.0]])
+    z = np.array([[0.0, 1.0, -1.0], [1.0, -1.0, 0.0]])
     means = np.array([10.0, 20.0, 30.0])
     sds = np.array([2.0, 4.0, 5.0])
-    expected = np.array([[10.0, 24.0, 25.0],
-                         [12.0, 16.0, 30.0]])
-    result = back_transform_env(z, means, sds, ['none', 'none', 'none'])
+    expected = np.array([[10.0, 24.0, 25.0], [12.0, 16.0, 30.0]])
+    result = back_transform_env(z, means, sds, ["none", "none", "none"])
     np.testing.assert_array_equal(result, expected)
+
 
 def test_back_transform_env_log_always_positive():
     """testing back_transform_env with log transform always returns positive values, even for extreme negative z"""
-    z     = np.array([[-100.0], [-10.0], [0.0]])
+    z = np.array([[-100.0], [-10.0], [0.0]])
     means = np.array([5.0])
-    sds   = np.array([2.0])
-    result = back_transform_env(z, means, sds, ['log'])
+    sds = np.array([2.0])
+    result = back_transform_env(z, means, sds, ["log"])
     assert np.all(result > 0)
+
 
 def test_back_transform_env_mixed():
     """testing back_transform_env applies none and log transforms to the correct columns independently"""
-    z     = np.array([[1.0, 2.0],
-                      [0.0, 1.0]])
+    z = np.array([[1.0, 2.0], [0.0, 1.0]])
     means = np.array([10.0, 3.0])
-    sds   = np.array([ 2.0, 1.0])
-    result = back_transform_env(z, means, sds, ['none', 'log'])
+    sds = np.array([2.0, 1.0])
+    result = back_transform_env(z, means, sds, ["none", "log"])
     # col 0: linear  — 1.0*2.0+10.0=12.0, 0.0*2.0+10.0=10.0
     # col 1: log     — exp(2.0*1.0+3.0)=exp(5.0), exp(1.0*1.0+3.0)=exp(4.0)
-    expected = np.array([[12.0, np.exp(5.0)],
-                         [10.0, np.exp(4.0)]])
+    expected = np.array([[12.0, np.exp(5.0)], [10.0, np.exp(4.0)]])
     np.testing.assert_allclose(result, expected)
+
 
 def test_back_transform_env_roundtrip(sample_locs):
     """testing back_transform_env composed with normalize_locs recovers original covariate values"""
     _, _, _, _, means, sds, transforms, norm_locs = normalize_locs(
-        sample_locs, transforms=['none', 'log', 'none']
+        sample_locs, transforms=["none", "log", "none"]
     )
     recovered = back_transform_env(norm_locs[:, 2:], means, sds, transforms)
     np.testing.assert_allclose(recovered, sample_locs[:, 2:], atol=1e-10)
 
+
 def test_back_transform_env_output_shape():
     """back_transform_env output shape matches input shape"""
-    z     = np.array([[1.0, 2.0, 3.0],
-                      [4.0, 5.0, 6.0],
-                      [7.0, 8.0, 9.0]])
+    z = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
     means = np.array([1.0, 2.0, 3.0])
-    sds   = np.array([1.0, 1.0, 1.0])
-    result = back_transform_env(z, means, sds, ['none', 'log', 'none'])
+    sds = np.array([1.0, 1.0, 1.0])
+    result = back_transform_env(z, means, sds, ["none", "log", "none"])
     assert result.shape == z.shape
