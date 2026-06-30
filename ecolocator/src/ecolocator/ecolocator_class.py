@@ -239,7 +239,7 @@ class EcoLocator:
         cov_names = [c for c in sample_data.columns if c not in {"sampleID2", "x", "y"}]
         if num_covs < 1:
             logging.warning(
-            f"Found {num_covs} covariates in sample data. Proceeding with location data only."
+                f"Found {num_covs} covariates in sample data. Proceeding with location data only."
             )
 
         genotypes, _ = filter_snps(
