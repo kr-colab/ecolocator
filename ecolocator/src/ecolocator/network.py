@@ -26,12 +26,21 @@ def build_network(
     for _ in range(int(np.ceil(nlayers / 2))):
         trunk = tf.keras.layers.Dense(width, activation="elu")(trunk)
     loc_output = tf.keras.layers.Dense(2)(tf.keras.layers.Dense(2)(trunk))
-    env_output = tf.keras.layers.Dense(num_covs)(tf.keras.layers.Dense(num_covs)(trunk))
-    model = tf.keras.Model(inputs=geno_input, outputs=[loc_output, env_output])
+    if num_covs > 0:
+        env_output = tf.keras.layers.Dense(num_covs)(
+            tf.keras.layers.Dense(num_covs)(trunk)
+        )
+        model = tf.keras.Model(inputs=geno_input, outputs=[loc_output, env_output])
+        losses = [euclid_loss, "mse"]
+        loss_weights = [loc_weight, env_weight]
+    else:
+        model = tf.keras.Model(inputs=geno_input, outputs=loc_output)
+        losses = [euclid_loss]
+        loss_weights = [loc_weight]
     model.compile(
         optimizer="Adam",
-        loss=[euclid_loss, "mse"],
-        loss_weights=[loc_weight, env_weight],
+        loss=losses,
+        loss_weights=loss_weights,
     )
     return model
 
@@ -63,8 +72,8 @@ def train_network(
     model: tf.keras.Model,
     traingen: np.ndarray,
     testgen: np.ndarray,
-    trainlocs: list,
-    testlocs: list,
+    trainlocs: list | np.ndarray,
+    testlocs: list | np.ndarray,
     max_epochs: int = 5000,
     batch_size: int = 32,
     patience: int = 100,

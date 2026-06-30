@@ -261,6 +261,86 @@ def test_shap_values_min_maf_filters_columns(example_data, tmp_path):
     assert len(result_filtered) < len(result_unfiltered)
 
 
+def test_fit_no_covariates(no_covariate_data):
+    """fit() works with x and y only — no covariate columns"""
+    matrix_path, sample_data_path = no_covariate_data
+    model = EcoLocator(nlayers=2, width=32)
+    model.fit(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=5,
+        patience=3,
+        train_split=0.6,
+        min_mac=1,
+    )
+    assert model.num_covs_ == 0
+    assert model.cov_names_ == []
+
+
+def test_predict_no_covariates(no_covariate_data, tmp_path):
+    """predict() with no covariates returns only sampleID, x, y columns"""
+    matrix_path, sample_data_path = no_covariate_data
+    model = EcoLocator(nlayers=2, width=32)
+    model.fit(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=5,
+        patience=3,
+        train_split=0.6,
+        min_mac=1,
+    )
+    sample_data = pd.read_csv(sample_data_path, sep="\t")
+    sample_data.iloc[0, 1:] = np.nan
+    masked_path = tmp_path / "masked.tsv"
+    sample_data.to_csv(masked_path, sep="\t", index=False)
+    result = model.predict(str(matrix_path), str(masked_path))
+    assert isinstance(result, pd.DataFrame)
+    assert list(result.columns) == ["sampleID", "x", "y"]
+
+
+def test_fit_predict_loo_no_covariates(no_covariate_data):
+    """fit_predict_loo() works with no covariates and returns only x, y columns"""
+    matrix_path, sample_data_path = no_covariate_data
+    model = EcoLocator(nlayers=2, width=32)
+    result = model.fit_predict_loo(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=5,
+        patience=3,
+        train_split=0.6,
+        min_mac=1,
+        max_folds=2,
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert list(result.columns) == ["sampleID", "x", "y"]
+
+
+def test_shap_values_no_covariates(no_covariate_data, tmp_path):
+    """shap_values() with no covariates returns only snp_id, x, y columns"""
+    matrix_path, sample_data_path = no_covariate_data
+    model = EcoLocator(nlayers=2, width=32)
+    model.fit(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=5,
+        patience=3,
+        train_split=0.6,
+        min_mac=1,
+    )
+    sample_data = pd.read_csv(sample_data_path, sep="\t")
+    sample_data.iloc[0, 1:] = np.nan
+    masked_path = tmp_path / "masked.tsv"
+    sample_data.to_csv(masked_path, sep="\t", index=False)
+    result = model.shap_values(
+        str(matrix_path),
+        str(masked_path),
+        str(matrix_path),
+        str(sample_data_path),
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert list(result.columns) == ["snp_id", "x", "y"]
+
+
 def test_shap_values_raw_returns_wide_format(example_data, tmp_path):
     """shap_values() with raw=True returns one row per unknown sample with all SNP×variable columns"""
     _, _, matrix_path, sample_data_path = example_data
@@ -293,3 +373,35 @@ def test_shap_values_raw_returns_wide_format(example_data, tmp_path):
     assert len(result) == 1
     assert "sampleID" in result.columns
     assert len(result.columns) == expected_n_cols
+
+
+def test_shap_values_raw_no_covariates(no_covariate_data, tmp_path):
+    """shap_values() raw=True with no covariates returns only _x and _y SHAP columns"""
+    matrix_path, sample_data_path = no_covariate_data
+    model = EcoLocator(nlayers=2, width=32)
+    model.fit(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=5,
+        patience=3,
+        train_split=0.6,
+        min_mac=1,
+    )
+    sample_data = pd.read_csv(sample_data_path, sep="\t")
+    sample_data.iloc[0, 1:] = np.nan
+    masked_path = tmp_path / "masked.tsv"
+    sample_data.to_csv(masked_path, sep="\t", index=False)
+    result = model.shap_values(
+        str(matrix_path),
+        str(masked_path),
+        str(matrix_path),
+        str(sample_data_path),
+        raw=True,
+    )
+    n_snps = len(model._kept_snp_indices_)
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 1
+    assert "sampleID" in result.columns
+    assert (
+        len(result.columns) == 1 + n_snps * 2
+    )  # sampleID + _x and _y per SNP, no env cols
