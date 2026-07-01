@@ -223,7 +223,7 @@ def test_shap_values_returns_dataframe(example_data, tmp_path):
     assert isinstance(result, pd.DataFrame)
     assert len(result) == n_snps
     assert list(result.columns) == expected_cols
-    assert set(result["snp_id"]) == set(model._kept_snp_indices_)
+    assert set(result["snp_id"]) == {str(i) for i in model._kept_snp_indices_}
 
 
 def test_shap_values_min_maf_filters_columns(example_data, tmp_path):

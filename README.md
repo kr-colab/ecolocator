@@ -120,7 +120,11 @@ ecolocator attribute \
 
 Output is a tab-separated file with one row per SNP and one column per output
 variable (`x`, `y`, and each covariate), containing mean absolute SHAP values
-across all attributed samples.
+across all attributed samples. The `snp_id` column identifies each SNP using
+whatever real identifier was available in `--genotypes`: the VCF `ID` field
+(falling back to `CHROM:POS` for every SNP if any are missing an ID, so
+identifiers don't mix formats), the zarr store's equivalent fields, or the
+genotype matrix's own column headers.
 
 Use `--background-size` (default 100) to control how many training samples are
 used as the SHAP background — larger values are more stable but slower. Use

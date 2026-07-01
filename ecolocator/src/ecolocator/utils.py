@@ -6,27 +6,56 @@ import pandas as pd
 import logging
 from scipy import stats
 
+def _resolve_snp_ids(
+    ids: np.ndarray,
+    chrom: np.ndarray,
+    pos: np.ndarray,
+) -> np.ndarray:
+    ids = np.asarray(ids).astype(str)
+    missing = (ids == "") | (ids == ".")
+    n_missing = int(missing.sum())
+    if n_missing == 0:
+        return ids
+    logging.warning(
+        f"{n_missing}/{len(ids)} SNPs have no VCF/zarr ID; "
+        f"using CHROM:POS for all SNPs so identifiers use one consistent format."
+    )
+    return np.char.add(
+        np.char.add(np.asarray(chrom).astype(str), ":"), np.asarray(pos).astype(str)
+    )
+
 
 def load_genotypes(
     zarr_path: str = None,
     vcf_path: str = None,
     matrix_path: str = None,
-) -> (allel.GenotypeArray, np.ndarray):
+) -> (allel.GenotypeArray, np.ndarray, np.ndarray):
     if zarr_path is not None:
         logging.info("reading zarr")
         callset = zarr.open_group(zarr_path, mode="r")
         gt = callset["calldata/GT"]
         genotypes = allel.GenotypeArray(gt[:])
         samples = callset["samples"][:]
-        _positions = callset["variants/POS"]
+        if "variants/ID" in callset and "variants/CHROM" in callset and "variants/POS" in callset:
+            snp_ids = _resolve_snp_ids(
+                callset["variants/ID"][:], callset["variants/CHROM"][:], callset["variants/POS"][:]
+            )
+        else:
+            logging.warning(
+                "zarr store is missing variant ID/CHROM/POS fields; "
+                "falling back to positional indices for SNP names."
+            )
+            snp_ids = np.arange(genotypes.shape[0]).astype(str)
     elif vcf_path is not None:
         logging.info("reading VCF")
         vcf = allel.read_vcf(vcf_path, log=sys.stderr)
         genotypes = allel.GenotypeArray(vcf["calldata/GT"])
         samples = vcf["samples"]
+        snp_ids = _resolve_snp_ids(vcf["variants/ID"], vcf["variants/CHROM"], vcf["variants/POS"])
     elif matrix_path is not None:
         gmat = pd.read_csv(matrix_path, sep="\t")
         samples = np.array(gmat["sampleID"])
+        snp_ids = np.array(gmat.columns.drop("sampleID"))
         gmat = gmat.drop(labels="sampleID", axis=1)
         gmat = np.array(gmat, dtype="int8")
         for i in range(
@@ -56,7 +85,7 @@ def load_genotypes(
         raise ValueError("Must provide one of zarr_path, vcf_path, or matrix_path")
     logging.info(f"loaded {np.shape(genotypes)} genotypes")
     logging.info(f"loaded {len(samples)} samples")
-    return genotypes, samples
+    return genotypes, samples, snp_ids
 
 
 def sort_samples(
