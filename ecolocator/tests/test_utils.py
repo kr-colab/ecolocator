@@ -10,6 +10,7 @@ from ecolocator.utils import (
     filter_snps,
     normalize_locs,
     back_transform_env,
+    _resolve_snp_ids,
 )
 
 
@@ -22,9 +23,11 @@ def test_load_genos_noinput():
 def test_load_genos_equivalence(example_data):
     """testing load genotypes returns same across data types"""
     vcf_path, zarr_path, matrix_path, _ = example_data
-    genos_vcf, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
-    genos_zarr, samples_zarr = load_genotypes(zarr_path=str(zarr_path))
-    genos_matrix, samples_matrix = load_genotypes(matrix_path=str(matrix_path))
+    genos_vcf, samples_vcf, snp_ids_vcf = load_genotypes(vcf_path=str(vcf_path))
+    genos_zarr, samples_zarr, snp_ids_zarr = load_genotypes(zarr_path=str(zarr_path))
+    genos_matrix, samples_matrix, snp_ids_matrix = load_genotypes(
+        matrix_path=str(matrix_path)
+    )
 
     # VCF and zarr are both phased — arrays should be exactly equal
     np.testing.assert_array_equal(genos_vcf, genos_zarr)
@@ -35,12 +38,18 @@ def test_load_genos_equivalence(example_data):
     np.testing.assert_array_equal(genos_zarr.to_n_alt(), genos_matrix.to_n_alt())
     np.testing.assert_array_equal(samples_vcf, samples_matrix)
     np.testing.assert_array_equal(samples_zarr, samples_matrix)
+    np.testing.assert_array_equal(snp_ids_vcf, snp_ids_zarr)
+    # matrix SNP ids should be exactly the file's own column headers
+    expected_matrix_ids = pd.read_csv(matrix_path, sep="\t", nrows=0).columns.drop(
+        "sampleID"
+    )
+    np.testing.assert_array_equal(snp_ids_matrix, np.array(expected_matrix_ids))
 
 
 def test_sort_samples(example_data):
     """testing sort samples returns the expected output with correctly formatted input"""
     vcf_path, _, _, sample_data_path = example_data
-    genos_vcf, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+    genos_vcf, samples_vcf, _ = load_genotypes(vcf_path=str(vcf_path))
     sample_data, locs = sort_samples(samples_vcf, sample_data_path)
     assert sample_data.shape[0] == len(samples_vcf)
     np.testing.assert_array_equal(sample_data.index, samples_vcf)
@@ -48,10 +57,30 @@ def test_sort_samples(example_data):
     assert not np.any(np.isnan(locs))
 
 
+def test_resolve_snp_ids_all_present():
+    """testing _resolve_snp_ids returns real IDs unchanged when none are missing"""
+    ids = np.array(["rs1", "rs2", "rs3"])
+    chrom = np.array(["1", "1", "2"])
+    pos = np.array([100, 200, 300])
+    result = _resolve_snp_ids(ids, chrom, pos)
+    np.testing.assert_array_equal(result, ids)
+
+
+def test_resolve_snp_ids_any_missing_falls_back_for_all(caplog):
+    """testing _resolve_snp_ids falls back to CHROM:POS for every SNP if any ID is missing"""
+    ids = np.array(["rs1", ".", "rs3"])
+    chrom = np.array(["1", "1", "2"])
+    pos = np.array([100, 200, 300])
+    with caplog.at_level(logging.WARNING):
+        result = _resolve_snp_ids(ids, chrom, pos)
+    np.testing.assert_array_equal(result, ["1:100", "1:200", "2:300"])
+    assert any("1/3" in message for message in caplog.messages)
+
+
 def test_sort_samples_errors(example_data, tmp_path):
     """testing sort samples raises errors when samples are missing, etc"""
     vcf_path, _, _, _ = example_data
-    _, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+    _, samples_vcf, _ = load_genotypes(vcf_path=str(vcf_path))
 
     # create a sample data file with missing samples
     bad_sample_ids = list(samples_vcf[:-1]) + ["missing_sample"]
@@ -69,7 +98,7 @@ def test_sort_samples_errors(example_data, tmp_path):
 def test_sort_samples_no_covs(example_data):
     """testing sort_samples works with no covariates (location prediction only)"""
     vcf_path, _, _, sample_data_path = example_data
-    _, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+    _, samples_vcf, _ = load_genotypes(vcf_path=str(vcf_path))
     sample_data, locs = sort_samples(samples_vcf, sample_data_path, covariates=[])
     assert locs.shape == (len(samples_vcf), 2)
     assert not np.any(np.isnan(locs))
@@ -78,7 +107,7 @@ def test_sort_samples_no_covs(example_data):
 def test_sort_samples_specific_covariates(example_data):
     """testing sort_samples respects an explicit covariate list"""
     vcf_path, _, _, sample_data_path = example_data
-    _, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+    _, samples_vcf, _ = load_genotypes(vcf_path=str(vcf_path))
     sample_data, locs = sort_samples(samples_vcf, sample_data_path, covariates=["cov1"])
     assert locs.shape == (len(samples_vcf), 3)
     assert not np.any(np.isnan(locs))
@@ -87,7 +116,7 @@ def test_sort_samples_specific_covariates(example_data):
 def test_sort_samples_count_mismatch(example_data, tmp_path):
     """testing sort_samples raises an informative error when sample counts differ but names match"""
     vcf_path, _, _, _ = example_data
-    _, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+    _, samples_vcf, _ = load_genotypes(vcf_path=str(vcf_path))
 
     # sample data with only the first 4 of 5 VCF samples — all names valid, one missing
     subset_ids = list(samples_vcf[:-1])
@@ -103,7 +132,7 @@ def test_sort_samples_count_mismatch(example_data, tmp_path):
 def test_sort_samples_count_mismatch_more(example_data, tmp_path):
     """testing sort_samples raises an informative error when TSV has more rows than the VCF"""
     vcf_path, _, _, _ = example_data
-    _, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+    _, samples_vcf, _ = load_genotypes(vcf_path=str(vcf_path))
 
     # all 5 VCF samples plus one extra
     extra_ids = list(samples_vcf) + ["extra_sample"]
@@ -119,7 +148,7 @@ def test_sort_samples_count_mismatch_more(example_data, tmp_path):
 def test_sort_samples_invalid_covariate(example_data):
     """testing sort_samples raises a clear error when a requested covariate column does not exist"""
     vcf_path, _, _, sample_data_path = example_data
-    _, samples_vcf = load_genotypes(vcf_path=str(vcf_path))
+    _, samples_vcf, _ = load_genotypes(vcf_path=str(vcf_path))
     with pytest.raises(ValueError, match="not found in sample data"):
         sort_samples(samples_vcf, sample_data_path, covariates=["nonexistent_col"])
 
@@ -128,7 +157,7 @@ def test_sort_samples_invalid_covariate(example_data):
 def test_replace_missing_data_no_missing(example_data):
     """replace_missing_data on fully-observed data returns same alt counts"""
     vcf_path, _, _, _ = example_data
-    genos, _ = load_genotypes(vcf_path=str(vcf_path))
+    genos, _, _ = load_genotypes(vcf_path=str(vcf_path))
     expected = genos.to_allele_counts()[:, :, 1]
     result = replace_missing_data(genos)
     np.testing.assert_array_equal(result, expected)
@@ -169,7 +198,7 @@ def test_replace_missing_data_non_missing_unchanged():
 def test_filter_snps_returns_correct_types(example_data):
     """testing filter_snps returns a GenotypeArray and a numpy array of indices"""
     vcf_path, _, _, _ = example_data
-    genos, _ = load_genotypes(vcf_path=str(vcf_path))
+    genos, _, _ = load_genotypes(vcf_path=str(vcf_path))
     filtered, kept_indices = filter_snps(genos)
     assert isinstance(filtered, allel.GenotypeArray)
     assert isinstance(kept_indices, np.ndarray)

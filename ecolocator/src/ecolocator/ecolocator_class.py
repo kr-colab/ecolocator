@@ -115,7 +115,7 @@ class EcoLocator:
     ) -> "EcoLocator":
         rng = np.random.default_rng(seed)
 
-        genotypes, samples = self._get_genotypes(genotype_path)
+        genotypes, samples, _ = self._get_genotypes(genotype_path)
         sample_data, locs = sort_samples(samples, sample_data_path)
 
         num_covs = locs.shape[1] - 2
@@ -185,7 +185,7 @@ class EcoLocator:
         genotype_path: str,
         sample_data_path: str,
     ) -> pd.DataFrame:
-        genotypes, samples = self._get_genotypes(genotype_path)
+        genotypes, samples, _ = self._get_genotypes(genotype_path)
         _, locs = sort_samples(samples, sample_data_path)
 
         genotypes = genotypes[self._kept_snp_indices_, :, :]
@@ -232,7 +232,7 @@ class EcoLocator:
         verbose: int = 1,
     ) -> pd.DataFrame:
         rng = np.random.default_rng(seed)
-        genotypes, samples = self._get_genotypes(genotype_path)
+        genotypes, samples, _ = self._get_genotypes(genotype_path)
         sample_data, locs = sort_samples(samples, sample_data_path)
 
         num_covs = locs.shape[1] - 2
@@ -355,7 +355,9 @@ class EcoLocator:
         rng = np.random.default_rng(seed if seed is not None else self.seed_)
 
         # load and filter training genos for bg
-        train_genotypes, train_samples = self._get_genotypes(train_genotype_path)
+        train_genotypes, train_samples, train_snp_ids = self._get_genotypes(
+            train_genotype_path
+        )
         train_genotypes = train_genotypes[self._kept_snp_indices_, :, :]
         train_ac = replace_missing_data(train_genotypes, rng=rng)
         _, train_locs = sort_samples(train_samples, train_sample_data_path)
@@ -363,7 +365,7 @@ class EcoLocator:
         traingen = np.transpose(train_ac[:, known])
 
         # load and filter pred genos
-        pred_genotypes, pred_samples = self._get_genotypes(genotype_path)
+        pred_genotypes, pred_samples, _ = self._get_genotypes(genotype_path)
         pred_genotypes = pred_genotypes[self._kept_snp_indices_, :, :]
         pred_ac = replace_missing_data(pred_genotypes)
         _, pred_locs = sort_samples(pred_samples, sample_data_path)
@@ -394,7 +396,7 @@ class EcoLocator:
             expl_env = shap.GradientExplainer(model_env, background)
             shap_env = expl_env.shap_values(predgen)
 
-        snp_ids = self._kept_snp_indices_
+        snp_ids = train_snp_ids[self._kept_snp_indices_]
 
         # apply min_maf filter to snp index list before building either format
         if min_maf is not None:
