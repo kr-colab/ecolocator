@@ -355,7 +355,9 @@ class EcoLocator:
         rng = np.random.default_rng(seed if seed is not None else self.seed_)
 
         # load and filter training genos for bg
-        train_genotypes, train_samples, train_snp_ids = self._get_genotypes(train_genotype_path)
+        train_genotypes, train_samples, train_snp_ids = self._get_genotypes(
+            train_genotype_path
+        )
         train_genotypes = train_genotypes[self._kept_snp_indices_, :, :]
         train_ac = replace_missing_data(train_genotypes, rng=rng)
         _, train_locs = sort_samples(train_samples, train_sample_data_path)

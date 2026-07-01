@@ -6,6 +6,7 @@ import pandas as pd
 import logging
 from scipy import stats
 
+
 def _resolve_snp_ids(
     ids: np.ndarray,
     chrom: np.ndarray,
@@ -36,9 +37,15 @@ def load_genotypes(
         gt = callset["calldata/GT"]
         genotypes = allel.GenotypeArray(gt[:])
         samples = callset["samples"][:]
-        if "variants/ID" in callset and "variants/CHROM" in callset and "variants/POS" in callset:
+        if (
+            "variants/ID" in callset
+            and "variants/CHROM" in callset
+            and "variants/POS" in callset
+        ):
             snp_ids = _resolve_snp_ids(
-                callset["variants/ID"][:], callset["variants/CHROM"][:], callset["variants/POS"][:]
+                callset["variants/ID"][:],
+                callset["variants/CHROM"][:],
+                callset["variants/POS"][:],
             )
         else:
             logging.warning(
@@ -51,7 +58,9 @@ def load_genotypes(
         vcf = allel.read_vcf(vcf_path, log=sys.stderr)
         genotypes = allel.GenotypeArray(vcf["calldata/GT"])
         samples = vcf["samples"]
-        snp_ids = _resolve_snp_ids(vcf["variants/ID"], vcf["variants/CHROM"], vcf["variants/POS"])
+        snp_ids = _resolve_snp_ids(
+            vcf["variants/ID"], vcf["variants/CHROM"], vcf["variants/POS"]
+        )
     elif matrix_path is not None:
         gmat = pd.read_csv(matrix_path, sep="\t")
         samples = np.array(gmat["sampleID"])

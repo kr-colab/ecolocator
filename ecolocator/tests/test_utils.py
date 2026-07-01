@@ -10,7 +10,7 @@ from ecolocator.utils import (
     filter_snps,
     normalize_locs,
     back_transform_env,
-    _resolve_snp_ids
+    _resolve_snp_ids,
 )
 
 
@@ -25,7 +25,9 @@ def test_load_genos_equivalence(example_data):
     vcf_path, zarr_path, matrix_path, _ = example_data
     genos_vcf, samples_vcf, snp_ids_vcf = load_genotypes(vcf_path=str(vcf_path))
     genos_zarr, samples_zarr, snp_ids_zarr = load_genotypes(zarr_path=str(zarr_path))
-    genos_matrix, samples_matrix, snp_ids_matrix = load_genotypes(matrix_path=str(matrix_path))
+    genos_matrix, samples_matrix, snp_ids_matrix = load_genotypes(
+        matrix_path=str(matrix_path)
+    )
 
     # VCF and zarr are both phased — arrays should be exactly equal
     np.testing.assert_array_equal(genos_vcf, genos_zarr)
@@ -38,8 +40,11 @@ def test_load_genos_equivalence(example_data):
     np.testing.assert_array_equal(samples_zarr, samples_matrix)
     np.testing.assert_array_equal(snp_ids_vcf, snp_ids_zarr)
     # matrix SNP ids should be exactly the file's own column headers
-    expected_matrix_ids = pd.read_csv(matrix_path, sep="\t", nrows=0).columns.drop("sampleID")
-    np.testing.assert_array_equal(snp_ids_matrix, np.array(expected_matrix_ids))    
+    expected_matrix_ids = pd.read_csv(matrix_path, sep="\t", nrows=0).columns.drop(
+        "sampleID"
+    )
+    np.testing.assert_array_equal(snp_ids_matrix, np.array(expected_matrix_ids))
+
 
 def test_sort_samples(example_data):
     """testing sort samples returns the expected output with correctly formatted input"""
@@ -51,6 +56,7 @@ def test_sort_samples(example_data):
     assert locs.shape == (len(samples_vcf), 5)
     assert not np.any(np.isnan(locs))
 
+
 def test_resolve_snp_ids_all_present():
     """testing _resolve_snp_ids returns real IDs unchanged when none are missing"""
     ids = np.array(["rs1", "rs2", "rs3"])
@@ -58,6 +64,7 @@ def test_resolve_snp_ids_all_present():
     pos = np.array([100, 200, 300])
     result = _resolve_snp_ids(ids, chrom, pos)
     np.testing.assert_array_equal(result, ids)
+
 
 def test_resolve_snp_ids_any_missing_falls_back_for_all(caplog):
     """testing _resolve_snp_ids falls back to CHROM:POS for every SNP if any ID is missing"""
@@ -68,6 +75,7 @@ def test_resolve_snp_ids_any_missing_falls_back_for_all(caplog):
         result = _resolve_snp_ids(ids, chrom, pos)
     np.testing.assert_array_equal(result, ["1:100", "1:200", "2:300"])
     assert any("1/3" in message for message in caplog.messages)
+
 
 def test_sort_samples_errors(example_data, tmp_path):
     """testing sort samples raises errors when samples are missing, etc"""
