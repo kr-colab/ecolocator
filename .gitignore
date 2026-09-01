@@ -164,3 +164,4 @@ out/test*
 
 # Doug-fir demo staging data (pulled from remote server for notebook/vignette prep)
 data/dougfir_demo/
+docs_playground.ipynb
