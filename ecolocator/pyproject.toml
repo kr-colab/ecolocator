@@ -33,12 +33,14 @@ build-backend = "uv_build"
 dev = [
     "msprime>=1.4.1",
 	"pytest",
-	"ruff"
+	"ruff",
+	"ipykernel"
 ]
 docs = [
 	"sphinx>=7.0",
 	"myst-parser[linkify]>=2.0",
 	"pydata-sphinx-theme>=0.15",
+	"furo>=2024.1",
 	"sphinx-copybutton>=0.5",
 	"sphinx-design>=0.5",
 ]

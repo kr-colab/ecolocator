@@ -16,8 +16,8 @@ network has a shared trunk feeding two output heads, one for geographic location
 :caption: Contents
 
 installation
-quickstart
-cli
+getting-started-cli
+getting-started-python
 api/index
 ```
 

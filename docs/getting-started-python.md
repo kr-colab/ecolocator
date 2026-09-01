@@ -1,17 +1,10 @@
-# Quickstart
+# Python usage
 
 This page shows the Python API. For the equivalent command-line workflow, see
-{doc}`cli`.
+{doc}`getting-started-cli`.
 
 ## Inputs
 
-`ecoLocator` needs two inputs:
-
-- **Genotypes** -- a `.vcf`, `.vcf.gz`, `.zarr`, or a dosage-matrix TSV
-  (`sampleID` plus one column per SNP, entries `0`/`1`/`2`).
-- **Sample metadata** -- a TSV with columns `sampleID`, `x`, `y`, and any number
-  of environmental covariate columns. Use `NA` for the `x`/`y` of samples whose
-  location should be predicted.
 
 ## Train a model
 
@@ -20,8 +13,8 @@ from ecolocator import EcoLocator
 
 model = EcoLocator()
 model.fit(
-    genotype_path="genotypes.vcf.gz",
-    sample_data_path="samples.tsv",
+    genotype_path="./data/test_genotypes.vcf.gz",
+    sample_data_path="./data/test_sample_data_cov.txt",
 )
 model.save("my_model")
 ```
@@ -31,19 +24,17 @@ model.save("my_model")
 
 ## Predict
 
-Reload a saved model and predict coordinates and covariates for the samples whose
-`x`/`y` are `NA`:
-
 ```python
 from ecolocator import EcoLocator
 
 model = EcoLocator.load("my_model")
 predictions = model.predict(
-    genotype_path="genotypes.vcf.gz",
-    sample_data_path="samples.tsv",
+    genotype_path="./data/test_genotypes.vcf.gz",
+    sample_data_path="./data/test_sample_data_cov.txt",
 )
 print(predictions)  # DataFrame: sampleID, x, y, <covariates...>
 ```
+
 
 ## Leave-one-out
 
@@ -53,9 +44,19 @@ turn:
 ```python
 model = EcoLocator()
 loo = model.fit_predict_loo(
-    genotype_path="genotypes.vcf.gz",
-    sample_data_path="samples.tsv",
+    genotype_path="./data/test_genotypes.vcf.gz",
+    sample_data_path="./data/test_sample_data_cov.txt",
 )
+```
+
+## SHAP feature attribution
+
+```python
+shap_out = model.shap_values(genotype_path="./data/test_genotypes.vcf.gz",
+                  sample_data_path="./data/test_sample_data_cov.txt",
+                  train_genotype_path ="./data/test_genotypes.vcf.gz",
+                  train_sample_data_path="./data/test_sample_data_cov.txt"
+                  )
 ```
 
 See {doc}`api/index` for the full parameter list of each method.
