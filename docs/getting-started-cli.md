@@ -1,12 +1,12 @@
 # Command-line usage
 
-`ecoLocator` needs two inputs:
+`EcoLocator` needs two inputs:
 
 - **Genotypes** -- a `.vcf`, `.vcf.gz`, `.zarr`, or a dosage-matrix TSV
   (`sampleID` plus one column per SNP, entries `0`/`1`/`2`).
 - **Sample metadata** -- a TSV with columns `sampleID`, `x`, `y`, and any number
-  of environmental covariate columns. Use `NA` for the `x`/`y` of samples whose
-  location should be predicted.
+  of environmental covariate columns. Use `NA` for the `x`, `y`, and covariate
+  values of samples whose location and environment should be predicted.
 
 Please find example data on Github at 
 `./data/test_genotypes.vcf.gz` and `./data/test_sample_data_cov.txt`
