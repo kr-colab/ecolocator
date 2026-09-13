@@ -1,7 +1,7 @@
 [project]
 name = "ecolocator"
 version = "0.1.0"
-description = "Add your description here"
+description = "Predict geographic origin and climate-of-origin from genotype data"
 readme = "README.md"
 authors = [
     { name = "jordannrodriguez", email = "jordanrodriguez48@yahoo.com" }
@@ -39,6 +39,7 @@ dev = [
 docs = [
 	"sphinx>=7.0",
 	"myst-parser[linkify]>=2.0",
+	"myst-nb>=1.0",
 	"pydata-sphinx-theme>=0.15",
 	"furo>=2024.1",
 	"sphinx-copybutton>=0.5",

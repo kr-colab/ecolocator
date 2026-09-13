@@ -8,7 +8,7 @@ import typer
 
 app = typer.Typer(
     add_completion=False,
-    help="ecoLocator: predict geographic origin and environmental covariates from genotype data.",
+    help="EcoLocator: predict geographic origin and environmental covariates from genotype data.",
     no_args_is_help=True,
 )
 

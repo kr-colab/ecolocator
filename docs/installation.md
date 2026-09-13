@@ -1,6 +1,6 @@
 # Installation
 
-`ecoLocator` is managed with [uv](https://docs.astral.sh/uv/) and requires
+`EcoLocator` is managed with [uv](https://docs.astral.sh/uv/) and requires
 Python 3.11 or newer.
 
 ## From source

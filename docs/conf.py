@@ -1,4 +1,4 @@
-"""Sphinx configuration for the ecoLocator documentation."""
+"""Sphinx configuration for the EcoLocator documentation."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ if _PKG_SRC.is_dir():
 
 # -- Project information ------------------------------------------------------
 
-project = "ecoLocator"
+project = "EcoLocator"
 author = "kr-colab"
 copyright = f"{datetime.now():%Y}, {author}"
 
@@ -29,7 +29,7 @@ version = ".".join(release.split(".")[:2])
 # -- General configuration ---------------------------------------------------
 
 extensions = [
-    "myst_parser",
+    "myst_nb",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
@@ -53,6 +53,13 @@ myst_enable_extensions = [
     "substitution",
 ]
 myst_heading_anchors = 3
+
+# -- MyST-NB (notebooks) ------------------------------------------------------
+
+# The dougfir demo notebook is a fixed record of a real analysis run elsewhere;
+# never re-execute it, just render whatever outputs it already has saved.
+nb_execution_mode = "off"
+
 
 # -- Autodoc / autosummary ---------------------------------------------------
 
@@ -82,7 +89,7 @@ intersphinx_mapping = {
 
 html_theme = "furo"
 html_static_path = ["_static"]
-html_title = "ecoLocator"
+html_title = "EcoLocator"
 
 html_theme_options = {
     "navigation_with_keys": True,
