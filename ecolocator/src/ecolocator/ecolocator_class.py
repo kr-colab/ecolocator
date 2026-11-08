@@ -158,6 +158,10 @@ class EcoLocator:
 
         self.num_covs_ = num_covs
         self.seed_ = seed
+        if seed is not None:
+            # Weight initialization, dropout masks, and batch shuffling draw
+            # from TensorFlow's own RNG, which the NumPy seed does not reach.
+            tf.keras.utils.set_random_seed(seed)
         self.model_ = build_network(
             n_snps=traingen.shape[1],
             num_covs=num_covs,
@@ -230,7 +234,18 @@ class EcoLocator:
         train_split: float = 0.9,
         seed: int = None,
         verbose: int = 1,
+        fold_start: int = 0,
+        fold_stop: int = None,
     ) -> pd.DataFrame:
+        """Leave-one-out fit and predict over samples with known coordinates.
+
+        Fold k holds out the k-th sample (in genotype order) that has known
+        coordinates. ``fold_start`` and ``fold_stop`` select folds
+        ``[fold_start, fold_stop)``, so that one LOO run can be split across
+        many jobs. When ``seed`` is set, each fold's validation split and
+        network initialization depend only on ``seed`` and the fold index,
+        so a fold gives the same prediction in any chunk.
+        """
         rng = np.random.default_rng(seed)
         genotypes, samples, _ = self._get_genotypes(genotype_path)
         sample_data, locs = sort_samples(samples, sample_data_path)
@@ -248,14 +263,23 @@ class EcoLocator:
         ac = replace_missing_data(genotypes, rng=rng)
 
         known = np.argwhere(~np.isnan(locs[:, 0])).flatten()
+        fold_ids = np.arange(len(known))[fold_start:fold_stop]
         if max_folds is not None:
-            known = known[:max_folds]
+            fold_ids = fold_ids[:max_folds]
         all_predictions = []
 
-        for fold, i in enumerate(known, start=1):
+        for n, fold in enumerate(fold_ids, start=1):
+            i = known[fold]
             logging.info(
-                f"LOO iteration {fold} of {len(known)}: holding out {samples[i]}"
+                f"LOO fold {fold} ({n} of {len(fold_ids)}): holding out {samples[i]}"
             )
+            if seed is not None:
+                fold_rng = np.random.default_rng([seed, fold])
+                tf.keras.utils.set_random_seed(
+                    int(np.random.SeedSequence([seed, fold]).generate_state(1)[0])
+                )
+            else:
+                fold_rng = rng
             loo_locs = locs.copy()
             loo_locs[i] = np.nan
 
@@ -266,7 +290,7 @@ class EcoLocator:
             )
 
             train = np.argwhere(~np.isnan(norm_locs[:, 0])).flatten()
-            test = rng.choice(
+            test = fold_rng.choice(
                 train, round((1 - train_split) * len(train)), replace=False
             )
             train = np.array([x for x in train if x not in test])

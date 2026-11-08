@@ -175,6 +175,14 @@ def loo(
         None,
         help="Stop after this many folds. Useful for smoke-testing before a full run.",
     ),
+    fold_start: int = typer.Option(
+        0,
+        help="First fold to run (0-based). Use with --fold-stop to split one LOO run across jobs.",
+    ),
+    fold_stop: Optional[int] = typer.Option(
+        None,
+        help="Run folds up to, but not including, this index (default: all).",
+    ),
     nlayers: int = typer.Option(10, help="Number of hidden layers in the trunk."),
     width: int = typer.Option(256, help="Units per hidden layer."),
     dropout_prop: float = typer.Option(0.25, help="Dropout proportion."),
@@ -232,6 +240,8 @@ def loo(
         seed=seed,
         verbose=verbose,
         max_folds=max_folds,
+        fold_start=fold_start,
+        fold_stop=fold_stop,
     )
     out.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(out, sep="\t", index=False)
