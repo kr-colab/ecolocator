@@ -173,6 +173,32 @@ def test_fit_predict_loo_chunk_matches_full_run(example_data):
     )
 
 
+def test_fit_predict_loo_shap(example_data):
+    """LOO with SHAP stores one SHAP row per fold and leaves predictions unchanged"""
+    _, _, matrix_path, sample_data_path = example_data
+    kwargs = dict(max_epochs=5, patience=3, train_split=0.6, min_mac=1, seed=5)
+    plain = EcoLocator(nlayers=2, width=32).fit_predict_loo(
+        str(matrix_path), str(sample_data_path), fold_stop=3, **kwargs
+    )
+    model = EcoLocator(nlayers=2, width=32)
+    with_shap = model.fit_predict_loo(
+        str(matrix_path),
+        str(sample_data_path),
+        fold_stop=3,
+        shap_background_size=5,
+        **kwargs,
+    )
+
+    pd.testing.assert_frame_equal(plain, with_shap)
+    s = model.loo_shap_
+    sample_data = pd.read_csv(sample_data_path, sep="\t")
+    n_outputs = 2 + (sample_data.shape[1] - 3)
+    assert list(s["sample_ids"]) == with_shap["sampleID"].tolist()
+    assert list(s["outputs"][:2]) == ["x", "y"]
+    assert s["values"].shape == (3, len(s["snp_ids"]), n_outputs)
+    assert np.isfinite(s["values"]).all()
+
+
 def test_fit_seed_is_reproducible(tmp_path, example_data):
     """fit() with the same seed gives the same predictions"""
     _, _, matrix_path, sample_data_path = example_data
