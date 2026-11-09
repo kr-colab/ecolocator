@@ -380,8 +380,11 @@ class EcoLocator:
 
         if shap_background_size is not None:
             self.loo_shap_ = {
-                "sample_ids": np.array([r["sampleID"] for r in all_predictions]),
-                "snp_ids": np.asarray(all_snp_ids)[kept_snps],
+                "sample_ids": np.array(
+                    [r["sampleID"] for r in all_predictions], dtype=str
+                ),
+                # Plain string arrays, so that np.load() reads them without pickle.
+                "snp_ids": np.asarray(all_snp_ids, dtype=str)[kept_snps],
                 "outputs": np.array(["x", "y"] + cov_names[:num_covs]),
                 "values": (
                     np.stack(fold_shap)

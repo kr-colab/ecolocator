@@ -197,6 +197,7 @@ def test_fit_predict_loo_shap(example_data):
     assert list(s["outputs"][:2]) == ["x", "y"]
     assert s["values"].shape == (3, len(s["snp_ids"]), n_outputs)
     assert np.isfinite(s["values"]).all()
+    assert all(s[k].dtype.kind == "U" for k in ("sample_ids", "snp_ids", "outputs"))
 
 
 def test_fit_seed_is_reproducible(tmp_path, example_data):
