@@ -73,7 +73,7 @@ column per covariate.
 Runs leave-one-out cross-validation over all samples. Pass the **full**
 sample-metadata file (all coordinates known) — the method handles masking
 internally, holding out one sample per fold, training a model, and predicting
-that sample. Results are checkpointed after every fold:
+that sample. The predictions are written when all folds are done:
 
 ```bash
 ecolocator loo \
@@ -85,6 +85,33 @@ ecolocator loo \
 Use `--max-folds N` to run only the first N folds, useful for a quick
 smoke-test before committing to a full run. All training hyperparameter flags
 are identical to `train`.
+
+### Splitting a LOO run across jobs
+
+Fold *k* holds out the *k*-th sample (in genotype order) with known
+coordinates. `--fold-start` and `--fold-stop` run only folds
+`[fold-start, fold-stop)`, so a large LOO run can be split across many jobs
+and the output tables concatenated afterwards:
+
+```bash
+ecolocator loo -g data/genotypes.tsv -s data/test_sample_data_cov.txt \
+    --fold-start 0 --fold-stop 50 --seed 1 --out out/loo_chunk0.tsv
+ecolocator loo -g data/genotypes.tsv -s data/test_sample_data_cov.txt \
+    --fold-start 50 --fold-stop 100 --seed 1 --out out/loo_chunk1.tsv
+```
+
+With `--seed`, each fold's validation split and network initialization depend
+only on the seed and the fold index, so a fold gives the same prediction in
+any chunk. Results repeat exactly only with the same number of CPU threads.
+
+### SHAP values from each fold
+
+`--shap-out FILE.npz` also computes, in every fold, the SHAP values of the
+held-out sample from the model that did not see it (background:
+`--shap-background-size` training samples, default 100). The `.npz` file holds
+`sample_ids`, `snp_ids`, `outputs` (`x`, `y`, then covariates), and `values`
+with shape (folds, SNPs, outputs). The mean absolute value over folds is a
+SNP-importance score computed entirely on held-out samples.
 
 ---
 
