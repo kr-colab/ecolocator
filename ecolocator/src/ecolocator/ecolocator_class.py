@@ -158,6 +158,10 @@ class EcoLocator:
 
         self.num_covs_ = num_covs
         self.seed_ = seed
+        if seed is not None:
+            # Weight initialization, dropout masks, and batch shuffling draw
+            # from TensorFlow's own RNG, which the NumPy seed does not reach.
+            tf.keras.utils.set_random_seed(seed)
         self.model_ = build_network(
             n_snps=traingen.shape[1],
             num_covs=num_covs,
@@ -230,9 +234,28 @@ class EcoLocator:
         train_split: float = 0.9,
         seed: int = None,
         verbose: int = 1,
+        fold_start: int = 0,
+        fold_stop: int = None,
+        shap_background_size: int = None,
     ) -> pd.DataFrame:
+        """Leave-one-out fit and predict over samples with known coordinates.
+
+        Fold k holds out the k-th sample (in genotype order) that has known
+        coordinates. ``fold_start`` and ``fold_stop`` select folds
+        ``[fold_start, fold_stop)``, so that one LOO run can be split across
+        many jobs. When ``seed`` is set, each fold's validation split and
+        network initialization depend only on ``seed`` and the fold index,
+        so a fold gives the same prediction in any chunk.
+
+        With ``shap_background_size``, each fold also computes SHAP values
+        for its held-out sample, from the model that did not see it, with a
+        background of that many training samples. They are stored in
+        ``self.loo_shap_``: a dict with ``sample_ids`` (n_folds),
+        ``snp_ids`` (n_snps), ``outputs`` (x, y, then covariates), and
+        ``values`` (n_folds x n_snps x n_outputs).
+        """
         rng = np.random.default_rng(seed)
-        genotypes, samples, _ = self._get_genotypes(genotype_path)
+        genotypes, samples, all_snp_ids = self._get_genotypes(genotype_path)
         sample_data, locs = sort_samples(samples, sample_data_path)
 
         num_covs = locs.shape[1] - 2
@@ -242,20 +265,30 @@ class EcoLocator:
                 f"Found {num_covs} covariates in sample data. Proceeding with location data only."
             )
 
-        genotypes, _ = filter_snps(
+        genotypes, kept_snps = filter_snps(
             genotypes, min_mac=min_mac, max_snps=max_snps, rng=rng
         )
         ac = replace_missing_data(genotypes, rng=rng)
+        fold_shap = []
 
         known = np.argwhere(~np.isnan(locs[:, 0])).flatten()
+        fold_ids = np.arange(len(known))[fold_start:fold_stop]
         if max_folds is not None:
-            known = known[:max_folds]
+            fold_ids = fold_ids[:max_folds]
         all_predictions = []
 
-        for fold, i in enumerate(known, start=1):
+        for n, fold in enumerate(fold_ids, start=1):
+            i = known[fold]
             logging.info(
-                f"LOO iteration {fold} of {len(known)}: holding out {samples[i]}"
+                f"LOO fold {fold} ({n} of {len(fold_ids)}): holding out {samples[i]}"
             )
+            if seed is not None:
+                fold_rng = np.random.default_rng([seed, fold])
+                tf.keras.utils.set_random_seed(
+                    int(np.random.SeedSequence([seed, fold]).generate_state(1)[0])
+                )
+            else:
+                fold_rng = rng
             loo_locs = locs.copy()
             loo_locs[i] = np.nan
 
@@ -266,7 +299,7 @@ class EcoLocator:
             )
 
             train = np.argwhere(~np.isnan(norm_locs[:, 0])).flatten()
-            test = rng.choice(
+            test = fold_rng.choice(
                 train, round((1 - train_split) * len(train)), replace=False
             )
             train = np.array([x for x in train if x not in test])
@@ -305,6 +338,17 @@ class EcoLocator:
             )
 
             prediction = model.predict(predgen)
+            if shap_background_size is not None:
+                fold_shap.append(
+                    self._loo_fold_shap(
+                        model,
+                        traingen,
+                        predgen,
+                        num_covs,
+                        shap_background_size,
+                        fold_rng,
+                    )
+                )
             if num_covs > 0:
                 pred_longlat = prediction[0] * np.array([sdlong, sdlat]) + np.array(
                     [meanlong, meanlat]
@@ -334,7 +378,39 @@ class EcoLocator:
             del model
             tf.keras.backend.clear_session()
 
+        if shap_background_size is not None:
+            self.loo_shap_ = {
+                "sample_ids": np.array(
+                    [r["sampleID"] for r in all_predictions], dtype=str
+                ),
+                # Plain string arrays, so that np.load() reads them without pickle.
+                "snp_ids": np.asarray(all_snp_ids, dtype=str)[kept_snps],
+                "outputs": np.array(["x", "y"] + cov_names[:num_covs]),
+                "values": (
+                    np.stack(fold_shap)
+                    if fold_shap
+                    else np.empty((0, len(kept_snps), 2 + num_covs))
+                ),
+            }
         return pd.DataFrame(all_predictions)
+
+    def _loo_fold_shap(self, model, traingen, predgen, num_covs, bg_size, rng):
+        """SHAP values of one held-out sample: array (n_snps, n_outputs)."""
+        import shap
+
+        bg_size = min(bg_size, traingen.shape[0])
+        background = traingen[rng.choice(traingen.shape[0], bg_size, replace=False)]
+        background = background.astype(np.float32)
+        x = predgen.astype(np.float32)
+        if num_covs > 0:
+            heads = [
+                tf.keras.Model(inputs=model.input, outputs=model.output[0]),
+                tf.keras.Model(inputs=model.input, outputs=model.output[1]),
+            ]
+        else:
+            heads = [model]
+        parts = [shap.GradientExplainer(h, background).shap_values(x)[0] for h in heads]
+        return np.concatenate(parts, axis=1)
 
     def shap_values(
         self,

@@ -56,6 +56,23 @@ loo = model.fit_predict_loo(
 )
 ```
 
+`fold_start` and `fold_stop` run only a range of folds, so one LOO run can be
+split across jobs; with `seed` set, a fold gives the same prediction in any
+range. `shap_background_size` also computes the SHAP values of each held-out
+sample from its fold's model and stores them in `model.loo_shap_`:
+
+```python
+loo = model.fit_predict_loo(
+    genotype_path="./data/test_genotypes.vcf.gz",
+    sample_data_path="./data/test_sample_data_cov.txt",
+    fold_start=0,
+    fold_stop=50,
+    seed=1,
+    shap_background_size=100,
+)
+model.loo_shap_["values"].shape  # (folds, SNPs, outputs)
+```
+
 ## SHAP feature attribution
 
 ```python

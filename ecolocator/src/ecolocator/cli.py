@@ -175,6 +175,26 @@ def loo(
         None,
         help="Stop after this many folds. Useful for smoke-testing before a full run.",
     ),
+    fold_start: int = typer.Option(
+        0,
+        help="First fold to run (0-based). Use with --fold-stop to split one LOO run across jobs.",
+    ),
+    fold_stop: Optional[int] = typer.Option(
+        None,
+        help="Run folds up to, but not including, this index (default: all).",
+    ),
+    shap_out: Optional[Path] = typer.Option(
+        None,
+        dir_okay=False,
+        help=(
+            "Also compute SHAP values of each held-out sample from its fold's "
+            "model, and save them to this .npz file (arrays: sample_ids, "
+            "snp_ids, outputs, values[fold, snp, output])."
+        ),
+    ),
+    shap_background_size: int = typer.Option(
+        100, help="Training samples used as the SHAP background in each fold."
+    ),
     nlayers: int = typer.Option(10, help="Number of hidden layers in the trunk."),
     width: int = typer.Option(256, help="Units per hidden layer."),
     dropout_prop: float = typer.Option(0.25, help="Dropout proportion."),
@@ -232,9 +252,18 @@ def loo(
         seed=seed,
         verbose=verbose,
         max_folds=max_folds,
+        fold_start=fold_start,
+        fold_stop=fold_stop,
+        shap_background_size=shap_background_size if shap_out else None,
     )
     out.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(out, sep="\t", index=False)
+    if shap_out is not None:
+        import numpy as np
+
+        shap_out.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(shap_out, **el.loo_shap_)
+        typer.echo(f"Per-fold SHAP values → {shap_out}")
     typer.echo(f"LOO complete: {len(result)} predictions → {out}")
 
 

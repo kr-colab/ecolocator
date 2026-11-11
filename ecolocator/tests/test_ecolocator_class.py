@@ -129,6 +129,102 @@ def test_fit_predict_loo_max_folds(example_data):
     assert len(result) == 2
 
 
+def test_fit_predict_loo_fold_range(example_data):
+    """fold_start/fold_stop hold out exactly the samples in that fold range"""
+    _, _, matrix_path, sample_data_path = example_data
+    model = EcoLocator(nlayers=2, width=32)
+    result = model.fit_predict_loo(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=5,
+        patience=3,
+        train_split=0.6,
+        min_mac=1,
+        seed=1,
+        fold_start=2,
+        fold_stop=4,
+    )
+    full_ids = model.fit_predict_loo(
+        str(matrix_path),
+        str(sample_data_path),
+        max_epochs=1,
+        patience=1,
+        train_split=0.6,
+        min_mac=1,
+        seed=1,
+    )["sampleID"].tolist()
+
+    assert result["sampleID"].tolist() == full_ids[2:4]
+
+
+def test_fit_predict_loo_chunk_matches_full_run(example_data):
+    """With a seed, a fold run alone gives the same prediction as in a full run"""
+    _, _, matrix_path, sample_data_path = example_data
+    kwargs = dict(max_epochs=5, patience=3, train_split=0.6, min_mac=1, seed=7)
+    full = EcoLocator(nlayers=2, width=32).fit_predict_loo(
+        str(matrix_path), str(sample_data_path), fold_stop=3, **kwargs
+    )
+    chunk = EcoLocator(nlayers=2, width=32).fit_predict_loo(
+        str(matrix_path), str(sample_data_path), fold_start=2, fold_stop=3, **kwargs
+    )
+
+    pd.testing.assert_frame_equal(
+        full.iloc[[2]].reset_index(drop=True), chunk.reset_index(drop=True)
+    )
+
+
+def test_fit_predict_loo_shap(example_data):
+    """LOO with SHAP stores one SHAP row per fold and leaves predictions unchanged"""
+    _, _, matrix_path, sample_data_path = example_data
+    kwargs = dict(max_epochs=5, patience=3, train_split=0.6, min_mac=1, seed=5)
+    plain = EcoLocator(nlayers=2, width=32).fit_predict_loo(
+        str(matrix_path), str(sample_data_path), fold_stop=3, **kwargs
+    )
+    model = EcoLocator(nlayers=2, width=32)
+    with_shap = model.fit_predict_loo(
+        str(matrix_path),
+        str(sample_data_path),
+        fold_stop=3,
+        shap_background_size=5,
+        **kwargs,
+    )
+
+    pd.testing.assert_frame_equal(plain, with_shap)
+    s = model.loo_shap_
+    sample_data = pd.read_csv(sample_data_path, sep="\t")
+    n_outputs = 2 + (sample_data.shape[1] - 3)
+    assert list(s["sample_ids"]) == with_shap["sampleID"].tolist()
+    assert list(s["outputs"][:2]) == ["x", "y"]
+    assert s["values"].shape == (3, len(s["snp_ids"]), n_outputs)
+    assert np.isfinite(s["values"]).all()
+    assert all(s[k].dtype.kind == "U" for k in ("sample_ids", "snp_ids", "outputs"))
+
+
+def test_fit_seed_is_reproducible(tmp_path, example_data):
+    """fit() with the same seed gives the same predictions"""
+    _, _, matrix_path, sample_data_path = example_data
+    sample_data = pd.read_csv(sample_data_path, sep="\t")
+    sample_data.iloc[0, 1:] = np.nan
+    masked_path = tmp_path / "masked.tsv"
+    sample_data.to_csv(masked_path, sep="\t", index=False)
+    preds = []
+    for _ in range(2):
+        model = EcoLocator(nlayers=2, width=32)
+        model.fit(
+            str(matrix_path),
+            str(masked_path),
+            max_epochs=5,
+            patience=3,
+            train_split=0.6,
+            min_mac=1,
+            seed=3,
+            verbose=0,
+        )
+        preds.append(model.predict(str(matrix_path), str(masked_path)))
+
+    pd.testing.assert_frame_equal(preds[0], preds[1])
+
+
 def test_save_load_roundtrip(tmp_path, example_data):
     """save() and load() round-trip restores all attributes and hyperparameters"""
     _, _, matrix_path, sample_data_path = example_data
