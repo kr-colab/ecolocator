@@ -219,7 +219,7 @@ def test_filter_snps_biallelic_only():
 
 
 def test_filter_snps_mac_filter():
-    """testing filter_snps removes SNPs whose alt allele count falls below min_mac"""
+    """testing filter_snps removes SNPs whose minor allele count falls below min_mac"""
     gt = allel.GenotypeArray(
         [
             [[0, 0], [0, 1], [0, 0], [0, 0]],  # mac=1 - removed with min_mac=2
@@ -233,12 +233,12 @@ def test_filter_snps_mac_filter():
 
 
 def test_filter_snps_mac_counts_the_minor_allele():
-    """testing filter_snps filters on the rarer allele, ancestral or derived"""
+    """testing filter_snps filters on the rarer allele, allele 0 or allele 1"""
     gt = allel.GenotypeArray(
         [
-            [[1, 1], [1, 1], [0, 1], [1, 1]],  # ancestral count 1 - removed
-            [[0, 0], [0, 0], [1, 0], [0, 0]],  # derived count 1 - removed
-            [[1, 1], [0, 1], [1, 0], [1, 1]],  # ancestral count 2 - kept
+            [[1, 1], [1, 1], [0, 1], [1, 1]],  # allele 0 count 1 - removed
+            [[0, 0], [0, 0], [1, 0], [0, 0]],  # allele 1 count 1 - removed
+            [[1, 1], [0, 1], [1, 0], [1, 1]],  # allele 0 count 2 - kept
         ]
     )
     filtered, kept_indices = filter_snps(gt, min_mac=2)
@@ -246,7 +246,8 @@ def test_filter_snps_mac_counts_the_minor_allele():
 
 
 def test_filter_snps_mac_with_alleles_other_than_0_and_1():
-    """testing filter_snps counts the minor allele when the two observed alleles are not 0 and 1"""
+    """testing filter_snps counts the minor allele of alleles 1 and 2, and drops sites
+    without allele 1, whose allele-1 dosage would be constant"""
     gt = allel.GenotypeArray(
         [
             [[1, 1], [2, 2], [1, 1], [1, 1]],  # alleles 1 and 2, minor count 2 - kept
@@ -256,11 +257,16 @@ def test_filter_snps_mac_with_alleles_other_than_0_and_1():
                 [1, 1],
                 [1, 1],
             ],  # alleles 1 and 2, minor count 1 - removed
-            [[0, 0], [0, 2], [2, 0], [0, 0]],  # alleles 0 and 2, minor count 2 - kept
+            [[0, 0], [0, 2], [2, 0], [0, 0]],  # alleles 0 and 2 - removed
         ]
     )
     filtered, kept_indices = filter_snps(gt, min_mac=2)
-    np.testing.assert_array_equal(kept_indices, [0, 2])
+    np.testing.assert_array_equal(kept_indices, [0])
+    # The kept site's allele-1 dosage varies across samples.
+    assert np.ptp(replace_missing_data(filtered)) > 0
+    # Without the count filter, the site with alleles 0 and 2 is still removed.
+    filtered, kept_indices = filter_snps(gt, min_mac=1)
+    np.testing.assert_array_equal(kept_indices, [0, 1])
 
 
 def test_filter_snps_min_mac_1_skips_mac_filter():
@@ -499,3 +505,15 @@ def test_back_transform_env_output_shape():
     sds = np.array([1.0, 1.0, 1.0])
     result = back_transform_env(z, means, sds, ["none", "log", "none"])
     assert result.shape == z.shape
+
+
+def test_filter_snps_max_snps_above_available_raises():
+    """testing filter_snps gives a clear error when max_snps exceeds the SNPs that pass"""
+    gt = allel.GenotypeArray(
+        [
+            [[0, 1], [0, 0], [0, 0], [0, 1]],
+            [[1, 1], [0, 1], [0, 1], [0, 0]],
+        ]
+    )
+    with pytest.raises(ValueError, match="max_snps"):
+        filter_snps(gt, min_mac=2, max_snps=5)
